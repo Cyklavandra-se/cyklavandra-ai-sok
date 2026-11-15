@@ -23,7 +23,7 @@ resor ur vårt utbud, med en kort motivering till varför varje resa passar.
 
 1. Ladda ner senaste `cyklavandra-ai-sok.zip` under **Releases** – *inte* "Source code (zip)".
 2. WordPress → Tillägg → Lägg till nytt → Ladda upp tillägg → Aktivera.
-   Vid uppdatering väljer du *Ersätt nuvarande med uppladdad*.
+   Därefter kommer nya versioner automatiskt (se *Uppdateringar*).
 3. Lägg API-nyckeln i `wp-config.php`:
    ```php
    define( 'CVAI_API_KEY', 'sk-ant-...' );
@@ -33,12 +33,24 @@ resor ur vårt utbud, med en kort motivering till varför varje resa passar.
 Shortcode-attribut: `platshallare`, `knapp`, `exempel="nej"`,
 `exempelfragor="Fråga 1|Fråga 2"`.
 
+## Uppdateringar
+
+Från 1.4.0 hämtar WordPress nya versioner direkt från GitHub-releaserna. De syns som
+vanliga uppdateringar under **Tillägg** och **Kontrollpanel → Uppdateringar**.
+
+- Klicka på **Aktivera automatiska uppdateringar** på raden för AI-sök i tilläggslistan
+  om WordPress ska installera dem själv (annars klickar du *Uppdatera nu*).
+- WordPress kollar två gånger per dygn. Länken **Sök efter uppdatering** på pluginens rad
+  kollar direkt.
+- Bara releaser med en färdigbyggd `cyklavandra-ai-sok.zip` räknas.
+
 ## Filer
 
 | Fil | Innehåll |
 |---|---|
 | `cyklavandra-ai-sok.php` | Katalog, prompt, REST-endpoint (`/wp-json/cvai/v1/search`), shortcode, admin |
 | `includes/i18n.php` | Texter per språk |
+| `includes/updater.php` | Uppdateringar från GitHub-releaser |
 | `assets/cvai.js` / `cvai.css` | Sökrutan och resultatkorten |
 | `wpml-config.xml` | Gör exempelfrågor och shortcode-attribut översättningsbara |
 
@@ -46,13 +58,17 @@ Shortcode-attribut: `platshallare`, `knapp`, `exempel="nej"`,
 
 1. Höj `Version:` och `CVAI_VERSION` i `cyklavandra-ai-sok.php`.
 2. Committa och pusha till `main`.
-3. På GitHub: **Releases → Draft a new release** → skapa taggen `v1.3.0` → **Publish release**.
+3. På GitHub: **Releases → Draft a new release** → skapa taggen `vX.Y.Z` (samma som
+   `Version:`) → **Publish release**. Texten i releasen visas under "Visa detaljer" i WordPress.
 4. GitHub Actions bygger zip-filen och bifogar den till releasen efter någon minut.
+   Bygget stoppas om taggen inte stämmer med `Version:`.
+5. Sajten hittar uppdateringen inom 12 timmar, eller direkt via *Sök efter uppdatering*.
 
 **Lägg aldrig API-nycklar eller lösenord i repot.**
 
 ## Versioner
 
+- **1.4.0** – Automatiska uppdateringar från GitHub-releaser. Länken "Sök efter uppdatering" i tilläggslistan.
 - **1.3.0** – Exempelfrågor per språk: egna fält i inställningarna och inbyggda exempel på alla åtta språken.
 - **1.2.1** – Skydd mot krasch om pluginen är installerad två gånger.
 - **1.2.0** – Färginställningar, hörnradie, bilder av/på, max antal träffar och alternativ. Texten i sökrutan får rätt färg i Avada.
