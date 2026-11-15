@@ -1,0 +1,58 @@
+# CLAUDE.md – Cykla & Vandra AI-sök
+
+WordPress-plugin för cyklavandra.se (Avada-tema, WPML, The Events Calendar). Kunden skriver
+en fritextbeskrivning av sin drömresa och får matchande resor från Claude. Planen är att den
+här sökningen ska bli grunden till en ny förstasida.
+
+Ägare: Pär (Cykla & Vandra). Skriv till honom på **svenska**, kort och konkret.
+
+## Arkitektur
+
+- `cyklavandra-ai-sok.php` – allt serverlogik:
+  - **Katalog** (`cvai_get_catalog`, `cvai_build_catalog`): publicerade sidor med taggen
+    `guidad`/`självguidad` (+ varianter på andra språk) och kommande evenemang från
+    The Events Calendar. En katalog per WPML-språk, cachad i transient
+    `cvai_catalog_{lang}_{ver}`; `cvai_flush_catalog()` bumpar `cvai_cat_ver`.
+  - **Svårighet** från taggar `hike1–4` / `bike1–4` (även WPML-slugs som `hike2-2`).
+  - **REST** `POST /wp-json/cvai/v1/search` `{q, lang}` → Anthropic Messages API med
+    `tool_choice` på verktyget `visa_resor` (strukturerat svar). Katalogen ligger i
+    systemprompten med `cache_control`.
+  - Skydd: same-origin-kontroll, rate limit per IP/timme, dygnstak.
+  - **Shortcode** `[cv_ai_sok]` (attribut: `platshallare`, `knapp`, `exempel="nej"`,
+    `exempelfragor="a|b"`). Pär skriver rubrik/ingress själv i Avada – lägg aldrig till det i pluginen.
+  - **Admin**: Inställningar → AI-sök (API-nyckel, modell, taggar, antal träffar, färger,
+    exempelfrågor per språk, sökhistorik, katalogförhandsvisning per språk).
+- `includes/i18n.php` – alla UI-texter + inbyggda exempelfrågor för sv, nb, da, en, de, fi, nl, fr.
+  WPML-koden `no` mappas till `nb`.
+- `assets/cvai.js`, `assets/cvai.css` – frontend. CSS-variabler sätts inline från inställningarna.
+  Avada skriver över formulärstilar, därav `!important` på textarea/knapp.
+- `wpml-config.xml` – gör shortcode-attribut översättningsbara.
+
+## Regler
+
+- API-nyckeln ligger i `wp-config.php` som `CVAI_API_KEY` – **aldrig i repot**.
+- AI:n får bara returnera id:n ur katalogen; servern filtrerar bort okända id:n.
+- Höj alltid `Version:` och `CVAI_VERSION` vid ändring, och lägg en rad under "Versioner" i README.md.
+- Bakåtkompatibilitet: nya inställningar ska ha standardvärden i `cvai_defaults()`.
+- Ändras databastabellen: höj `CVAI_DB_VERSION` (uppgradering sker i `cvai_maybe_upgrade`).
+
+## Testa lokalt
+
+Ingen MySQL behövs: WordPress + SQLite Database Integration (från GitHub) + `php`.
+Mocka Anthropic-anropet med filtret `pre_http_request` och WPML med filtren
+`wpml_current_language`, `wpml_active_languages`, `wpml_post_language_details` och actionen
+`wpml_switch_language`. Kör alltid `php -l` och `node --check assets/cvai.js`.
+
+## Release
+
+1. Pusha till `main`.
+2. På GitHub: Releases → Draft a new release → ny tagg `vX.Y.Z` → Publish.
+3. `.github/workflows/release.yml` bygger `cyklavandra-ai-sok.zip` och bifogar den.
+4. Pär installerar via Tillägg → Ladda upp → "Ersätt nuvarande med uppladdad".
+   Påminn om att ladda ner `cyklavandra-ai-sok.zip`, **inte** "Source code (zip)".
+
+## Idéer framåt
+
+- Automatiska uppdateringar från GitHub-releaser (t.ex. plugin-update-checker).
+- Ny förstasida byggd runt sökningen.
+- Kompletta månadstaggar på alla resor (taggen `oktober` saknas på många resor som går i oktober).
