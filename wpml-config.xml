@@ -1,0 +1,17 @@
+<wpml-config>
+	<admin-texts>
+		<key name="cvai_options">
+			<key name="examples" />
+		</key>
+	</admin-texts>
+	<shortcodes>
+		<shortcode>
+			<tag>cv_ai_sok</tag>
+			<attributes>
+				<attribute>platshallare</attribute>
+				<attribute>knapp</attribute>
+				<attribute>exempelfragor</attribute>
+			</attributes>
+		</shortcode>
+	</shortcodes>
+</wpml-config>

@@ -1,0 +1,389 @@
+<?php
+/**
+ * Texter i sökrutan och resultaten, per språk.
+ *
+ * Inbyggda språk: svenska, norska (bokmål), danska, engelska, tyska, finska, nederländska, franska.
+ * Saknas ett språk används engelska. Vill du ändra en text: använd filtret 'cvai_strings',
+ * t.ex. i temats functions.php:
+ *
+ *   add_filter( 'cvai_strings', function ( $s, $lang ) {
+ *       if ( 'nb' === $lang ) { $s['button'] = 'Finn turer'; }
+ *       return $s;
+ *   }, 10, 2 );
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+/** WPML-koder → våra språknycklar. */
+function cvai_norm_lang( $lang ) {
+	$lang = strtolower( (string) $lang );
+	$map  = array(
+		'no'    => 'nb',
+		'nn'    => 'nb',
+		'nb'    => 'nb',
+		'se'    => 'sv',
+		'en-gb' => 'en',
+		'en-us' => 'en',
+		'de-ch' => 'de',
+		'de-at' => 'de',
+		'pt-pt' => 'pt',
+		'pt-br' => 'pt',
+	);
+	if ( isset( $map[ $lang ] ) ) {
+		return $map[ $lang ];
+	}
+	return substr( $lang, 0, 2 );
+}
+
+function cvai_lang_name( $lang ) {
+	$names = array(
+		'sv' => 'svenska',
+		'nb' => 'norska (bokmål)',
+		'da' => 'danska',
+		'en' => 'engelska',
+		'de' => 'tyska',
+		'fi' => 'finska',
+		'nl' => 'nederländska',
+		'fr' => 'franska',
+		'es' => 'spanska',
+		'it' => 'italienska',
+		'pt' => 'portugisiska',
+		'pl' => 'polska',
+	);
+	$k = cvai_norm_lang( $lang );
+	return $names[ $k ] ?? $lang;
+}
+
+function cvai_all_strings() {
+	return array(
+		'sv' => array(
+			'placeholder'      => 'T.ex. Vi är 6 personer som vill vandra i Italien i oktober. Vi har vandrat i Österrike många somrar.',
+			'button'           => 'Hitta resor',
+			'label'            => 'Beskriv er resa',
+			'hint'             => 'AI-stödd sökning bland alla våra resor',
+			'loading'          => 'Letar bland våra resor',
+			'interp_title'     => 'Så tolkade vi er fråga',
+			'best'             => 'Bäst för er',
+			'also'             => 'Kan också passa',
+			'why'              => 'Därför passar den:',
+			'more'             => 'Läs mer och boka →',
+			'none'             => 'Vi hittade ingen resa som passar riktigt. Kontakta oss gärna så hjälper vi er!',
+			'err_short'        => 'Beskriv gärna lite mer vad ni söker.',
+			'err_forbidden'    => 'Otillåten förfrågan.',
+			'err_rate'         => 'Du har gjort många sökningar på kort tid. Vänta en stund och försök igen.',
+			'err_cap'          => 'AI-sökningen är tillfälligt otillgänglig. Kontakta oss gärna direkt så hjälper vi dig!',
+			'err_config'       => 'AI-sökningen är inte konfigurerad.',
+			'err_api'          => 'Sökningen fungerade inte just nu. Försök igen om en stund.',
+			'err_parse'        => 'Sökningen gav ett oväntat svar. Försök gärna formulera om dig.',
+			'err_generic'      => 'Något gick fel. Försök igen.',
+			'guided'           => 'Guidad',
+			'self_guided'      => 'På egen hand',
+			'hiking'           => 'Vandring',
+			'cycling'          => 'Cykel',
+			'guided_departure' => 'Guidad avgång',
+			'lbl_land'         => 'Land',
+			'lbl_manad'        => 'Månad',
+			'lbl_aktivitet'    => 'Aktivitet',
+			'lbl_niva'         => 'Nivå',
+			'lbl_antal'        => 'Antal',
+			'lbl_ovrigt'       => 'Övrigt',
+			'level'            => '%1$s nivå %2$d – %3$s',
+			'lvl1'             => 'lätt',
+			'lvl2'             => 'medel',
+			'lvl3'             => 'krävande',
+			'lvl4'             => 'mycket krävande',
+		),
+		'nb' => array(
+			'placeholder'      => 'F.eks. Vi er 6 personer som vil gå tur i Italia i oktober. Vi har gått i Østerrike mange somre.',
+			'button'           => 'Finn reiser',
+			'label'            => 'Beskriv reisen deres',
+			'hint'             => 'AI-støttet søk blant alle våre reiser',
+			'loading'          => 'Leter blant reisene våre',
+			'interp_title'     => 'Slik forsto vi spørsmålet',
+			'best'             => 'Best for dere',
+			'also'             => 'Kan også passe',
+			'why'              => 'Derfor passer den:',
+			'more'             => 'Les mer og bestill →',
+			'none'             => 'Vi fant ingen reise som passer helt. Ta gjerne kontakt, så hjelper vi dere!',
+			'err_short'        => 'Beskriv gjerne litt mer hva dere ser etter.',
+			'err_forbidden'    => 'Ugyldig forespørsel.',
+			'err_rate'         => 'Du har gjort mange søk på kort tid. Vent litt og prøv igjen.',
+			'err_cap'          => 'AI-søket er midlertidig utilgjengelig. Ta gjerne kontakt direkte, så hjelper vi deg!',
+			'err_config'       => 'AI-søket er ikke konfigurert.',
+			'err_api'          => 'Søket fungerte ikke akkurat nå. Prøv igjen om litt.',
+			'err_parse'        => 'Søket ga et uventet svar. Prøv gjerne å formulere deg annerledes.',
+			'err_generic'      => 'Noe gikk galt. Prøv igjen.',
+			'guided'           => 'Guidet',
+			'self_guided'      => 'På egen hånd',
+			'hiking'           => 'Fottur',
+			'cycling'          => 'Sykkel',
+			'guided_departure' => 'Guidet avreise',
+			'lbl_land'         => 'Land',
+			'lbl_manad'        => 'Måned',
+			'lbl_aktivitet'    => 'Aktivitet',
+			'lbl_niva'         => 'Nivå',
+			'lbl_antal'        => 'Antall',
+			'lbl_ovrigt'       => 'Annet',
+			'level'            => '%1$s nivå %2$d – %3$s',
+			'lvl1'             => 'lett',
+			'lvl2'             => 'middels',
+			'lvl3'             => 'krevende',
+			'lvl4'             => 'svært krevende',
+		),
+		'da' => array(
+			'placeholder'      => 'F.eks. Vi er 6 personer, der gerne vil vandre i Italien i oktober. Vi har vandret i Østrig mange somre.',
+			'button'           => 'Find rejser',
+			'label'            => 'Beskriv jeres rejse',
+			'hint'             => 'AI-understøttet søgning blandt alle vores rejser',
+			'loading'          => 'Leder blandt vores rejser',
+			'interp_title'     => 'Sådan forstod vi jeres ønske',
+			'best'             => 'Bedst for jer',
+			'also'             => 'Kan også passe',
+			'why'              => 'Derfor passer den:',
+			'more'             => 'Læs mere og book →',
+			'none'             => 'Vi fandt ingen rejse, der passer helt. Kontakt os gerne, så hjælper vi jer!',
+			'err_short'        => 'Beskriv gerne lidt mere, hvad I søger.',
+			'err_forbidden'    => 'Ugyldig forespørgsel.',
+			'err_rate'         => 'Du har lavet mange søgninger på kort tid. Vent lidt og prøv igen.',
+			'err_cap'          => 'AI-søgningen er midlertidigt utilgængelig. Kontakt os gerne direkte!',
+			'err_config'       => 'AI-søgningen er ikke konfigureret.',
+			'err_api'          => 'Søgningen virkede ikke lige nu. Prøv igen om lidt.',
+			'err_parse'        => 'Søgningen gav et uventet svar. Prøv gerne at formulere dig anderledes.',
+			'err_generic'      => 'Noget gik galt. Prøv igen.',
+			'guided'           => 'Guidet',
+			'self_guided'      => 'På egen hånd',
+			'hiking'           => 'Vandring',
+			'cycling'          => 'Cykel',
+			'guided_departure' => 'Guidet afgang',
+			'lbl_land'         => 'Land',
+			'lbl_manad'        => 'Måned',
+			'lbl_aktivitet'    => 'Aktivitet',
+			'lbl_niva'         => 'Niveau',
+			'lbl_antal'        => 'Antal',
+			'lbl_ovrigt'       => 'Andet',
+			'level'            => '%1$s niveau %2$d – %3$s',
+			'lvl1'             => 'let',
+			'lvl2'             => 'middel',
+			'lvl3'             => 'krævende',
+			'lvl4'             => 'meget krævende',
+		),
+		'en' => array(
+			'placeholder'      => 'E.g. We are 6 people who want to hike in Italy in October. We have hiked in Austria many summers.',
+			'button'           => 'Find trips',
+			'label'            => 'Describe your trip',
+			'hint'             => 'AI-assisted search across all our trips',
+			'loading'          => 'Searching our trips',
+			'interp_title'     => 'How we understood your request',
+			'best'             => 'Best for you',
+			'also'             => 'Could also suit you',
+			'why'              => 'Why it suits you:',
+			'more'             => 'Read more and book →',
+			'none'             => 'We could not find a trip that fits well. Please contact us and we will help!',
+			'err_short'        => 'Please describe a little more what you are looking for.',
+			'err_forbidden'    => 'Request not allowed.',
+			'err_rate'         => 'You have made many searches in a short time. Please wait a moment and try again.',
+			'err_cap'          => 'The AI search is temporarily unavailable. Please contact us directly!',
+			'err_config'       => 'The AI search is not configured.',
+			'err_api'          => 'The search did not work right now. Please try again shortly.',
+			'err_parse'        => 'The search returned an unexpected answer. Please try rephrasing.',
+			'err_generic'      => 'Something went wrong. Please try again.',
+			'guided'           => 'Guided',
+			'self_guided'      => 'Self-guided',
+			'hiking'           => 'Hiking',
+			'cycling'          => 'Cycling',
+			'guided_departure' => 'Guided departure',
+			'lbl_land'         => 'Country',
+			'lbl_manad'        => 'Month',
+			'lbl_aktivitet'    => 'Activity',
+			'lbl_niva'         => 'Level',
+			'lbl_antal'        => 'Group',
+			'lbl_ovrigt'       => 'Other',
+			'level'            => '%1$s level %2$d – %3$s',
+			'lvl1'             => 'easy',
+			'lvl2'             => 'moderate',
+			'lvl3'             => 'demanding',
+			'lvl4'             => 'very demanding',
+		),
+		'de' => array(
+			'placeholder'      => 'Z. B. Wir sind 6 Personen und möchten im Oktober in Italien wandern. Wir sind viele Sommer in Österreich gewandert.',
+			'button'           => 'Reisen finden',
+			'label'            => 'Beschreiben Sie Ihre Reise',
+			'hint'             => 'KI-gestützte Suche in allen unseren Reisen',
+			'loading'          => 'Wir durchsuchen unsere Reisen',
+			'interp_title'     => 'So haben wir Ihre Anfrage verstanden',
+			'best'             => 'Am besten für Sie',
+			'also'             => 'Könnte auch passen',
+			'why'              => 'Darum passt sie:',
+			'more'             => 'Mehr lesen und buchen →',
+			'none'             => 'Wir haben keine passende Reise gefunden. Kontaktieren Sie uns gern, wir helfen Ihnen!',
+			'err_short'        => 'Bitte beschreiben Sie etwas genauer, was Sie suchen.',
+			'err_forbidden'    => 'Unzulässige Anfrage.',
+			'err_rate'         => 'Sie haben in kurzer Zeit viele Suchen durchgeführt. Bitte warten Sie einen Moment.',
+			'err_cap'          => 'Die KI-Suche ist vorübergehend nicht verfügbar. Kontaktieren Sie uns gern direkt!',
+			'err_config'       => 'Die KI-Suche ist nicht konfiguriert.',
+			'err_api'          => 'Die Suche hat gerade nicht funktioniert. Bitte versuchen Sie es gleich noch einmal.',
+			'err_parse'        => 'Die Suche lieferte eine unerwartete Antwort. Bitte formulieren Sie Ihre Anfrage anders.',
+			'err_generic'      => 'Etwas ist schiefgelaufen. Bitte erneut versuchen.',
+			'guided'           => 'Geführt',
+			'self_guided'      => 'Individuell',
+			'hiking'           => 'Wandern',
+			'cycling'          => 'Radfahren',
+			'guided_departure' => 'Geführter Termin',
+			'lbl_land'         => 'Land',
+			'lbl_manad'        => 'Monat',
+			'lbl_aktivitet'    => 'Aktivität',
+			'lbl_niva'         => 'Niveau',
+			'lbl_antal'        => 'Personen',
+			'lbl_ovrigt'       => 'Sonstiges',
+			'level'            => '%1$s Stufe %2$d – %3$s',
+			'lvl1'             => 'leicht',
+			'lvl2'             => 'mittel',
+			'lvl3'             => 'anspruchsvoll',
+			'lvl4'             => 'sehr anspruchsvoll',
+		),
+		'fi' => array(
+			'placeholder'      => 'Esim. Olemme 6 hengen porukka ja haluaisimme vaeltaa Italiassa lokakuussa. Olemme vaeltaneet Itävallassa monena kesänä.',
+			'button'           => 'Etsi matkoja',
+			'label'            => 'Kuvaile matkaanne',
+			'hint'             => 'Tekoälyavusteinen haku kaikista matkoistamme',
+			'loading'          => 'Etsimme matkoistamme',
+			'interp_title'     => 'Näin ymmärsimme toiveenne',
+			'best'             => 'Parhaat teille',
+			'also'             => 'Voisi myös sopia',
+			'why'              => 'Miksi se sopii:',
+			'more'             => 'Lue lisää ja varaa →',
+			'none'             => 'Emme löytäneet täysin sopivaa matkaa. Ota yhteyttä, niin autamme!',
+			'err_short'        => 'Kerro vähän tarkemmin, mitä etsitte.',
+			'err_forbidden'    => 'Pyyntö ei ole sallittu.',
+			'err_rate'         => 'Olet tehnyt monta hakua lyhyessä ajassa. Odota hetki ja yritä uudelleen.',
+			'err_cap'          => 'Tekoälyhaku ei ole tilapäisesti käytettävissä. Ota meihin yhteyttä suoraan!',
+			'err_config'       => 'Tekoälyhakua ei ole määritetty.',
+			'err_api'          => 'Haku ei toiminut juuri nyt. Yritä hetken päästä uudelleen.',
+			'err_parse'        => 'Haku antoi odottamattoman vastauksen. Kokeile muotoilla toisin.',
+			'err_generic'      => 'Jokin meni vikaan. Yritä uudelleen.',
+			'guided'           => 'Opastettu',
+			'self_guided'      => 'Omatoiminen',
+			'hiking'           => 'Vaellus',
+			'cycling'          => 'Pyöräily',
+			'guided_departure' => 'Opastettu lähtö',
+			'lbl_land'         => 'Maa',
+			'lbl_manad'        => 'Kuukausi',
+			'lbl_aktivitet'    => 'Aktiviteetti',
+			'lbl_niva'         => 'Taso',
+			'lbl_antal'        => 'Henkilöt',
+			'lbl_ovrigt'       => 'Muuta',
+			'level'            => '%1$s taso %2$d – %3$s',
+			'lvl1'             => 'helppo',
+			'lvl2'             => 'keskitaso',
+			'lvl3'             => 'vaativa',
+			'lvl4'             => 'erittäin vaativa',
+		),
+		'nl' => array(
+			'placeholder'      => 'Bijv. We zijn met 6 personen en willen in oktober wandelen in Italië. We hebben vele zomers in Oostenrijk gewandeld.',
+			'button'           => 'Vind reizen',
+			'label'            => 'Beschrijf jullie reis',
+			'hint'             => 'AI-ondersteund zoeken in al onze reizen',
+			'loading'          => 'We zoeken in onze reizen',
+			'interp_title'     => 'Zo begrepen we jullie vraag',
+			'best'             => 'Het beste voor jullie',
+			'also'             => 'Past misschien ook',
+			'why'              => 'Daarom past deze:',
+			'more'             => 'Lees meer en boek →',
+			'none'             => 'We vonden geen reis die echt past. Neem gerust contact op, dan helpen we jullie!',
+			'err_short'        => 'Beschrijf iets uitgebreider wat jullie zoeken.',
+			'err_forbidden'    => 'Verzoek niet toegestaan.',
+			'err_rate'         => 'Je hebt in korte tijd veel zoekopdrachten gedaan. Wacht even en probeer opnieuw.',
+			'err_cap'          => 'Het AI-zoeken is tijdelijk niet beschikbaar. Neem gerust direct contact op!',
+			'err_config'       => 'Het AI-zoeken is niet ingesteld.',
+			'err_api'          => 'Het zoeken werkte nu niet. Probeer het zo opnieuw.',
+			'err_parse'        => 'Het zoeken gaf een onverwacht antwoord. Probeer het anders te formuleren.',
+			'err_generic'      => 'Er ging iets mis. Probeer opnieuw.',
+			'guided'           => 'Begeleid',
+			'self_guided'      => 'Op eigen gelegenheid',
+			'hiking'           => 'Wandelen',
+			'cycling'          => 'Fietsen',
+			'guided_departure' => 'Begeleid vertrek',
+			'lbl_land'         => 'Land',
+			'lbl_manad'        => 'Maand',
+			'lbl_aktivitet'    => 'Activiteit',
+			'lbl_niva'         => 'Niveau',
+			'lbl_antal'        => 'Aantal',
+			'lbl_ovrigt'       => 'Overig',
+			'level'            => '%1$s niveau %2$d – %3$s',
+			'lvl1'             => 'makkelijk',
+			'lvl2'             => 'gemiddeld',
+			'lvl3'             => 'uitdagend',
+			'lvl4'             => 'zeer uitdagend',
+		),
+		'fr' => array(
+			'placeholder'      => 'Ex. Nous sommes 6 et souhaitons randonner en Italie en octobre. Nous avons randonné en Autriche de nombreux étés.',
+			'button'           => 'Trouver des voyages',
+			'label'            => 'Décrivez votre voyage',
+			'hint'             => 'Recherche assistée par IA parmi tous nos voyages',
+			'loading'          => 'Nous cherchons parmi nos voyages',
+			'interp_title'     => 'Ce que nous avons compris',
+			'best'             => 'Le mieux pour vous',
+			'also'             => 'Pourrait aussi vous plaire',
+			'why'              => 'Pourquoi il vous convient :',
+			'more'             => 'En savoir plus et réserver →',
+			'none'             => 'Nous n’avons pas trouvé de voyage vraiment adapté. Contactez-nous, nous vous aiderons !',
+			'err_short'        => 'Décrivez un peu plus ce que vous recherchez.',
+			'err_forbidden'    => 'Requête non autorisée.',
+			'err_rate'         => 'Vous avez fait beaucoup de recherches en peu de temps. Patientez un instant.',
+			'err_cap'          => 'La recherche IA est temporairement indisponible. Contactez-nous directement !',
+			'err_config'       => 'La recherche IA n’est pas configurée.',
+			'err_api'          => 'La recherche n’a pas fonctionné. Réessayez dans un instant.',
+			'err_parse'        => 'La recherche a donné une réponse inattendue. Essayez de reformuler.',
+			'err_generic'      => 'Une erreur s’est produite. Réessayez.',
+			'guided'           => 'Accompagné',
+			'self_guided'      => 'En liberté',
+			'hiking'           => 'Randonnée',
+			'cycling'          => 'Vélo',
+			'guided_departure' => 'Départ accompagné',
+			'lbl_land'         => 'Pays',
+			'lbl_manad'        => 'Mois',
+			'lbl_aktivitet'    => 'Activité',
+			'lbl_niva'         => 'Niveau',
+			'lbl_antal'        => 'Groupe',
+			'lbl_ovrigt'       => 'Autre',
+			'level'            => '%1$s niveau %2$d – %3$s',
+			'lvl1'             => 'facile',
+			'lvl2'             => 'modéré',
+			'lvl3'             => 'exigeant',
+			'lvl4'             => 'très exigeant',
+		),
+	);
+}
+
+/** Alla texter för ett språk (engelska som reserv), efter filtret 'cvai_strings'. */
+function cvai_strings( $lang ) {
+	static $cache = array();
+	$k = cvai_norm_lang( $lang );
+	if ( ! isset( $cache[ $k ] ) ) {
+		$all         = cvai_all_strings();
+		$base        = $all[ $k ] ?? array();
+		$cache[ $k ] = apply_filters( 'cvai_strings', array_merge( $all['en'], $base ), $k );
+	}
+	return $cache[ $k ];
+}
+
+function cvai_t( $key, $lang ) {
+	$s = cvai_strings( $lang );
+	return $s[ $key ] ?? $key;
+}
+
+function cvai_level_label( $type, $n, $lang ) {
+	$act = 'bike' === $type ? cvai_t( 'cycling', $lang ) : cvai_t( 'hiking', $lang );
+	return sprintf( cvai_t( 'level', $lang ), $act, $n, cvai_t( 'lvl' . $n, $lang ) );
+}
+
+function cvai_js_strings( $lang ) {
+	$keys = array( 'loading', 'interp_title', 'best', 'also', 'why', 'more', 'none', 'err_short', 'err_generic', 'lbl_land', 'lbl_manad', 'lbl_aktivitet', 'lbl_niva', 'lbl_antal', 'lbl_ovrigt' );
+	$out  = array();
+	foreach ( $keys as $k ) {
+		$out[ $k ] = cvai_t( $k, $lang );
+	}
+	return $out;
+}

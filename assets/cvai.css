@@ -1,0 +1,41 @@
+/* Cykla & Vandra – AI-sök. Ärver typsnitt från temat (Avada). */
+.cvai{--cvai-text:#1f2a24;--cvai-green:#2f5d46;--cvai-btn-text:#fff;--cvai-line:#e2ddd0;--cvai-muted:#5d6a62;--cvai-accent:#c8692c;--cvai-card:#fff;--cvai-radius:14px;--cvai-green2:color-mix(in srgb,var(--cvai-green) 12%,#fff);color:var(--cvai-text);max-width:900px;margin:0 auto}
+.cvai *{box-sizing:border-box}
+.cvai-title{margin:0 0 .3em}
+.cvai-lead{color:var(--cvai-muted);margin:0 0 1.2em}
+.cvai-form{background:var(--cvai-card);border:1px solid var(--cvai-line);border-radius:calc(var(--cvai-radius) + 2px);padding:14px;box-shadow:0 6px 24px rgba(40,50,30,.07)}
+.cvai .cvai-q{width:100%;border:0!important;box-shadow:none!important;background:transparent!important;resize:vertical;min-height:80px;font-size:17px;line-height:1.5;padding:4px!important;outline:none;color:var(--cvai-text)!important;-webkit-text-fill-color:var(--cvai-text)}
+.cvai .cvai-q::placeholder{color:var(--cvai-muted)!important;-webkit-text-fill-color:var(--cvai-muted);opacity:.8}
+.cvai-row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px}
+.cvai-hint{font-size:13px;color:var(--cvai-muted)}
+.cvai .cvai-go{background:var(--cvai-green)!important;color:var(--cvai-btn-text)!important;border:0;border-radius:calc(var(--cvai-radius) * .7);padding:11px 22px;font-weight:600;cursor:pointer;font-size:15px}
+.cvai .cvai-go:disabled{opacity:.55;cursor:default}
+.cvai-chips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0}
+.cvai .cvai-chip{background:transparent;border:1px solid var(--cvai-line);border-radius:99px;padding:6px 12px;font-size:14px;cursor:pointer;color:inherit}
+.cvai .cvai-chip:hover{background:var(--cvai-green2)}
+.cvai-status{margin:20px 0 0}
+.cvai-err{display:block;background:#fbeaea;border:1px solid #efc7c7;color:#7a2a2a;padding:10px 14px;border-radius:10px}
+.cvai-loading{color:var(--cvai-muted)}
+.cvai-loading::after{content:"";animation:cvai-d 1.2s steps(4) infinite}
+@keyframes cvai-d{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+.cvai-interp{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:22px 0 4px}
+.cvai-interp>span:first-child{font-size:13px;color:var(--cvai-muted);margin-right:4px}
+.cvai-tag{font-size:13px;background:var(--cvai-green2);color:var(--cvai-green);padding:3px 10px;border-radius:99px}
+.cvai-summary{font-size:20px;line-height:1.4;margin:12px 0 10px}
+.cvai-sub{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--cvai-muted);margin:24px 0 10px}
+.cvai-grid{display:grid;gap:14px}
+.cvai-card{display:grid;grid-template-columns:220px 1fr;background:var(--cvai-card);border:1px solid var(--cvai-line);border-radius:var(--cvai-radius);overflow:hidden}
+.cvai-card:not(:has(.cvai-img)){grid-template-columns:1fr}
+.cvai-top{border-color:color-mix(in srgb,var(--cvai-green) 35%,var(--cvai-line));box-shadow:0 4px 18px rgba(0,0,0,.07)}
+.cvai-img img{width:100%;height:100%;object-fit:cover;display:block;min-height:160px}
+.cvai-body{padding:16px 18px;display:grid;gap:8px;align-content:start}
+.cvai-meta{display:flex;flex-wrap:wrap;gap:6px}
+.cvai-m{font-size:12.5px;border:1px solid var(--cvai-line);border-radius:7px;padding:2px 8px;color:var(--cvai-muted)}
+.cvai-lvl{border-color:#e7c7ae;color:#9a4f1e;background:#fbf1e8}
+.cvai-h{margin:0!important;font-size:20px!important;line-height:1.25!important}
+.cvai-h a{color:var(--cvai-text)!important;text-decoration:none}
+.cvai-why,.cvai-summary{color:var(--cvai-text)}
+.cvai-why{margin:0;font-size:15px}
+.cvai-why strong{color:var(--cvai-green)}
+.cvai-more{color:var(--cvai-accent)!important;font-weight:600;text-decoration:none;font-size:14.5px}
+@media (max-width:640px){.cvai-card{grid-template-columns:1fr}.cvai-img img{height:170px;min-height:0}}
