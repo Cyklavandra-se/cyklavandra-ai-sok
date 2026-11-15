@@ -24,6 +24,8 @@ här sökningen ska bli grunden till en ny förstasida.
     exempelfrågor per språk, sökhistorik, katalogförhandsvisning per språk).
 - `includes/i18n.php` – alla UI-texter + inbyggda exempelfrågor för sv, nb, da, en, de, fi, nl, fr.
   WPML-koden `no` mappas till `nb`.
+- `includes/updater.php` – uppdateringar från GitHub-releaser via `Update URI` +
+  filtret `update_plugins_github.com`; kräver bifogad `cyklavandra-ai-sok.zip` (cache `cvai_gh_release`).
 - `assets/cvai.js`, `assets/cvai.css` – frontend. CSS-variabler sätts inline från inställningarna.
   Avada skriver över formulärstilar, därav `!important` på textarea/knapp.
 - `wpml-config.xml` – gör shortcode-attribut översättningsbara.
@@ -48,11 +50,11 @@ Mocka Anthropic-anropet med filtret `pre_http_request` och WPML med filtren
 1. Pusha till `main`.
 2. På GitHub: Releases → Draft a new release → ny tagg `vX.Y.Z` → Publish.
 3. `.github/workflows/release.yml` bygger `cyklavandra-ai-sok.zip` och bifogar den.
-4. Pär installerar via Tillägg → Ladda upp → "Ersätt nuvarande med uppladdad".
-   Påminn om att ladda ner `cyklavandra-ai-sok.zip`, **inte** "Source code (zip)".
+4. Sajter med 1.4.0+ får uppdateringen automatiskt (taggen måste stämma med `Version:`,
+   annars stoppar workflowen). Äldre: Tillägg → Ladda upp → "Ersätt nuvarande med uppladdad"
+   med `cyklavandra-ai-sok.zip`, **inte** "Source code (zip)".
 
 ## Idéer framåt
 
-- Automatiska uppdateringar från GitHub-releaser (t.ex. plugin-update-checker).
 - Ny förstasida byggd runt sökningen.
 - Kompletta månadstaggar på alla resor (taggen `oktober` saknas på många resor som går i oktober).

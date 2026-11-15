@@ -16,6 +16,17 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name }}
 
+      - name: Kontrollera att taggen stämmer med versionen
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          VER=$(grep -m1 -E '^\s*\*\s*Version:' cyklavandra-ai-sok.php | sed -E 's/.*Version:\s*//' | tr -d '[:space:]')
+          CONST=$(grep -m1 "define( 'CVAI_VERSION'" cyklavandra-ai-sok.php | sed -E "s/.*'CVAI_VERSION', '([^']+)'.*/\1/")
+          echo "Tagg: $TAG  Version: $VER  CVAI_VERSION: $CONST"
+          if [ "${TAG#v}" != "$VER" ] || [ "$VER" != "$CONST" ]; then
+            echo "::error::Taggen ($TAG) måste vara v + Version ($VER) och lika med CVAI_VERSION ($CONST)."
+            exit 1
+          fi
+
       - name: Bygg zip
         run: |
           mkdir -p build/cyklavandra-ai-sok
