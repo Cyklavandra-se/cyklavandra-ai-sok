@@ -45,8 +45,9 @@ Shortcode-attribut: `platshallare`, `knapp`, `exempel="nej"`,
 ## Ny version
 
 1. Höj `Version:` och `CVAI_VERSION` i `cyklavandra-ai-sok.php`.
-2. Committa, tagga och pusha: `git tag v1.3.0 && git push --tags`.
-3. GitHub Actions bygger zip-filen och lägger den under Releases.
+2. Committa och pusha till `main`.
+3. På GitHub: **Releases → Draft a new release** → skapa taggen `v1.3.0` → **Publish release**.
+4. GitHub Actions bygger zip-filen och bifogar den till releasen efter någon minut.
 
 **Lägg aldrig API-nycklar eller lösenord i repot.**
 

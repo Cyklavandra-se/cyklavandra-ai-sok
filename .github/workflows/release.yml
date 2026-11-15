@@ -1,18 +1,20 @@
 name: Bygg release
 
+# Körs när du publicerar en release på GitHub (Releases → Draft a new release).
 on:
-  push:
-    tags:
-      - "v*"
+  release:
+    types: [published]
 
 permissions:
   contents: write
 
 jobs:
-  release:
+  zip:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
 
       - name: Bygg zip
         run: |
@@ -20,10 +22,7 @@ jobs:
           rsync -a --exclude '.git*' --exclude '.github' --exclude 'build' --exclude 'README.md' ./ build/cyklavandra-ai-sok/
           cd build && zip -r ../cyklavandra-ai-sok.zip cyklavandra-ai-sok
 
-      - name: Skapa release
+      - name: Bifoga zip till releasen
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" cyklavandra-ai-sok.zip \
-            --title "$GITHUB_REF_NAME" \
-            --notes "Ladda ner cyklavandra-ai-sok.zip och ladda upp under Tillägg → Lägg till nytt → Ladda upp tillägg."
+        run: gh release upload "${{ github.event.release.tag_name }}" cyklavandra-ai-sok.zip --clobber
