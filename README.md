@@ -53,6 +53,7 @@ Shortcode-attribut: `platshallare`, `knapp`, `exempel="nej"`,
 
 ## Versioner
 
+- **1.3.0** – Exempelfrågor per språk: egna fält i inställningarna och inbyggda exempel på alla åtta språken.
 - **1.2.1** – Skydd mot krasch om pluginen är installerad två gånger.
 - **1.2.0** – Färginställningar, hörnradie, bilder av/på, max antal träffar och alternativ. Texten i sökrutan får rätt färg i Avada.
 - **1.1.0** – WPML-stöd: en katalog per språk och texter på åtta språk.

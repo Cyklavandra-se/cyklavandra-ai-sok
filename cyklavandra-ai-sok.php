@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.2.1
+ * Version:     1.3.0
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -23,7 +23,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.2.1' );
+define( 'CVAI_VERSION', '1.3.0' );
 define( 'CVAI_DB_VERSION', '2' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -45,6 +45,7 @@ function cvai_defaults() {
 		'examples'       => "Vi är 6 personer som vill vandra i Italien i oktober. Vi är ganska duktiga vandrare och har gått i Österrike många somrar.\nTvå pensionärer som vill cykla lugnt i maj, gärna med vin och god mat.\nJag vill på en guidad vandringsresa i höst och slippa planera själv.\nFamilj med två tonåringar som vill vandra i bergen i juli.",
 		'extra_rules'    => '',
 		'log_enabled'    => 1,
+		'examples_by_lang' => array(),
 		'max_hits'       => 4,
 		'max_alts'       => 2,
 		'color_text'     => '#1f2a24',
@@ -708,8 +709,7 @@ function cvai_shortcode( $atts ) {
 		if ( $atts['exempelfragor'] ) {
 			$examples = array_map( 'trim', explode( '|', $atts['exempelfragor'] ) );
 		} else {
-			// Exempeltexten kan översättas per språk i WPML → String Translation (admin_texts_cvai_options).
-			$examples = array_map( 'trim', explode( "\n", (string) cvai_opt( 'examples' ) ) );
+			$examples = array_map( 'trim', explode( "\n", cvai_examples_for( $lang ) ) );
 		}
 		$examples = array_values( array_filter( $examples ) );
 	}
@@ -745,6 +745,18 @@ function cvai_shortcode( $atts ) {
 	</div>
 	<?php
 	return ob_get_clean();
+}
+
+/** Exempelfrågor för ett språk: egna från inställningarna, annars inbyggda. */
+function cvai_examples_for( $lang ) {
+	$is_default = ! cvai_has_wpml() || $lang === cvai_default_lang();
+	if ( $is_default ) {
+		$own = trim( (string) cvai_opt( 'examples' ) );
+	} else {
+		$by  = (array) cvai_opt( 'examples_by_lang' );
+		$own = trim( (string) ( $by[ $lang ] ?? '' ) );
+	}
+	return '' !== $own ? $own : cvai_t( 'examples', $lang );
 }
 
 function cvai_style_vars() {
@@ -817,6 +829,10 @@ function cvai_sanitize_options( $in ) {
 	$out['rate_per_hour']  = max( 1, (int) ( $in['rate_per_hour'] ?? 20 ) );
 	$out['daily_cap']      = max( 1, (int) ( $in['daily_cap'] ?? 500 ) );
 	$out['examples']       = sanitize_textarea_field( $in['examples'] ?? '' );
+	$out['examples_by_lang'] = array();
+	foreach ( (array) ( $in['examples_by_lang'] ?? array() ) as $l => $txt ) {
+		$out['examples_by_lang'][ sanitize_key( $l ) ] = sanitize_textarea_field( (string) $txt );
+	}
 	$out['extra_rules']    = sanitize_textarea_field( $in['extra_rules'] ?? '' );
 	$out['max_hits']       = max( 1, min( 8, (int) ( $in['max_hits'] ?? 4 ) ) );
 	$out['max_alts']       = max( 0, min( 6, (int) ( $in['max_alts'] ?? 2 ) ) );
@@ -906,7 +922,17 @@ function cvai_admin_page() {
 				<tr><th>Guidade avgångar</th><td><label><input type="checkbox" name="cvai_options[include_events]" value="1" <?php checked( $o['include_events'] ); ?>> Ta med kommande evenemang från The Events Calendar</label></td></tr>
 				<tr><th>Max sökningar per besökare/timme</th><td><input type="number" min="1" name="cvai_options[rate_per_hour]" value="<?php echo (int) $o['rate_per_hour']; ?>"></td></tr>
 				<tr><th>Max sökningar per dygn (totalt)</th><td><input type="number" min="1" name="cvai_options[daily_cap]" value="<?php echo (int) $o['daily_cap']; ?>"><p class="description">Kostnadsspärr för alla språk tillsammans.</p></td></tr>
-				<tr><th>Exempelfrågor</th><td><textarea class="large-text" rows="4" name="cvai_options[examples]"><?php echo esc_textarea( $o['examples'] ); ?></textarea><p class="description">En per rad, på huvudspråket. Översätt i WPML → String Translation (domän <em>admin_texts_cvai_options</em>) eller ange <code>exempelfragor="…"</code> i shortcoden på respektive språksida.</p></td></tr>
+				<tr><th>Exempelfrågor</th><td>
+					<p class="description" style="margin-bottom:8px">En fråga per rad. Lämna ett språk tomt för att använda de inbyggda exemplen, som visas i grått.</p>
+					<?php foreach ( $langs as $l => $lname ) : ?>
+						<?php $is_def = ! cvai_has_wpml() || $l === cvai_default_lang(); ?>
+						<p style="margin:10px 0 4px"><strong><?php echo esc_html( $lname ); ?></strong></p>
+						<textarea class="large-text" rows="4" placeholder="<?php echo esc_attr( cvai_t( 'examples', $l ) ); ?>"
+							name="<?php echo $is_def ? 'cvai_options[examples]' : 'cvai_options[examples_by_lang][' . esc_attr( $l ) . ']'; ?>"><?php
+							echo esc_textarea( $is_def ? $o['examples'] : ( $o['examples_by_lang'][ $l ] ?? '' ) );
+						?></textarea>
+					<?php endforeach; ?>
+				</td></tr>
 				<tr><th>Extra regler till AI:n</th><td><textarea class="large-text" rows="4" name="cvai_options[extra_rules]"><?php echo esc_textarea( $o['extra_rules'] ); ?></textarea><p class="description">Gäller alla språk. T.ex. "Lyft gärna fram tågresor för kunder som vill undvika flyg."</p></td></tr>
 				<tr><th>Sökhistorik</th><td><label><input type="checkbox" name="cvai_options[log_enabled]" value="1" <?php checked( $o['log_enabled'] ); ?>> Spara sökningar (utan IP-adress)</label></td></tr>
 			</table>

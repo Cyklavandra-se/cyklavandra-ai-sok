@@ -60,6 +60,7 @@ function cvai_all_strings() {
 	return array(
 		'sv' => array(
 			'placeholder'      => 'T.ex. Vi är 6 personer som vill vandra i Italien i oktober. Vi har vandrat i Österrike många somrar.',
+			'examples'         => "Vi är 6 personer som vill vandra i Italien i oktober. Vi är ganska duktiga vandrare och har gått i Österrike många somrar.\nTvå pensionärer som vill cykla lugnt i maj, gärna med vin och god mat.\nJag vill på en guidad vandringsresa i höst och slippa planera själv.\nFamilj med två tonåringar som vill vandra i bergen i juli.",
 			'button'           => 'Hitta resor',
 			'label'            => 'Beskriv er resa',
 			'hint'             => 'AI-stödd sökning bland alla våra resor',
@@ -97,6 +98,7 @@ function cvai_all_strings() {
 		),
 		'nb' => array(
 			'placeholder'      => 'F.eks. Vi er 6 personer som vil gå tur i Italia i oktober. Vi har gått i Østerrike mange somre.',
+			'examples'         => "Vi er 6 personer som vil gå tur i Italia i oktober. Vi er ganske erfarne og har gått i Østerrike mange somre.\nTo pensjonister som vil sykle rolig i mai, gjerne med vin og god mat.\nJeg vil på en guidet fottur til høsten og slippe å planlegge selv.\nFamilie med to tenåringer som vil gå tur i fjellet i juli.",
 			'button'           => 'Finn reiser',
 			'label'            => 'Beskriv reisen deres',
 			'hint'             => 'AI-støttet søk blant alle våre reiser',
@@ -134,6 +136,7 @@ function cvai_all_strings() {
 		),
 		'da' => array(
 			'placeholder'      => 'F.eks. Vi er 6 personer, der gerne vil vandre i Italien i oktober. Vi har vandret i Østrig mange somre.',
+			'examples'         => "Vi er 6 personer, der vil vandre i Italien i oktober. Vi er ret erfarne og har vandret i Østrig mange somre.\nTo pensionister, der vil cykle roligt i maj, gerne med vin og god mad.\nJeg vil på en guidet vandretur til efteråret og slippe for selv at planlægge.\nFamilie med to teenagere, der vil vandre i bjergene i juli.",
 			'button'           => 'Find rejser',
 			'label'            => 'Beskriv jeres rejse',
 			'hint'             => 'AI-understøttet søgning blandt alle vores rejser',
@@ -171,6 +174,7 @@ function cvai_all_strings() {
 		),
 		'en' => array(
 			'placeholder'      => 'E.g. We are 6 people who want to hike in Italy in October. We have hiked in Austria many summers.',
+			'examples'         => "We are 6 people who want to hike in Italy in October. We are fairly experienced and have hiked in Austria many summers.\nTwo retirees who want to cycle at a gentle pace in May, ideally with wine and good food.\nI would like a guided hiking trip this autumn without having to plan it myself.\nFamily with two teenagers who want to hike in the mountains in July.",
 			'button'           => 'Find trips',
 			'label'            => 'Describe your trip',
 			'hint'             => 'AI-assisted search across all our trips',
@@ -208,6 +212,7 @@ function cvai_all_strings() {
 		),
 		'de' => array(
 			'placeholder'      => 'Z. B. Wir sind 6 Personen und möchten im Oktober in Italien wandern. Wir sind viele Sommer in Österreich gewandert.',
+			'examples'         => "Wir sind 6 Personen und möchten im Oktober in Italien wandern. Wir sind recht erfahren und viele Sommer in Österreich gewandert.\nZwei Rentner, die im Mai gemütlich Rad fahren möchten, gern mit Wein und gutem Essen.\nIch möchte im Herbst eine geführte Wanderreise machen, ohne selbst zu planen.\nFamilie mit zwei Teenagern, die im Juli in den Bergen wandern möchte.",
 			'button'           => 'Reisen finden',
 			'label'            => 'Beschreiben Sie Ihre Reise',
 			'hint'             => 'KI-gestützte Suche in allen unseren Reisen',
@@ -245,6 +250,7 @@ function cvai_all_strings() {
 		),
 		'fi' => array(
 			'placeholder'      => 'Esim. Olemme 6 hengen porukka ja haluaisimme vaeltaa Italiassa lokakuussa. Olemme vaeltaneet Itävallassa monena kesänä.',
+			'examples'         => "Olemme 6 hengen porukka ja haluaisimme vaeltaa Italiassa lokakuussa. Olemme melko kokeneita ja vaeltaneet Itävallassa monena kesänä.\nKaksi eläkeläistä, jotka haluavat pyöräillä rauhallisesti toukokuussa, mielellään viinin ja hyvän ruoan parissa.\nHaluaisin opastetulle vaellusmatkalle syksyllä ilman omaa suunnittelua.\nPerhe, jossa on kaksi teiniä, haluaa vaeltaa vuorilla heinäkuussa.",
 			'button'           => 'Etsi matkoja',
 			'label'            => 'Kuvaile matkaanne',
 			'hint'             => 'Tekoälyavusteinen haku kaikista matkoistamme',
@@ -282,6 +288,7 @@ function cvai_all_strings() {
 		),
 		'nl' => array(
 			'placeholder'      => 'Bijv. We zijn met 6 personen en willen in oktober wandelen in Italië. We hebben vele zomers in Oostenrijk gewandeld.',
+			'examples'         => "We zijn met 6 personen en willen in oktober wandelen in Italië. We zijn vrij ervaren en hebben vele zomers in Oostenrijk gewandeld.\nTwee gepensioneerden die in mei rustig willen fietsen, graag met wijn en lekker eten.\nIk wil dit najaar een begeleide wandelreis zonder zelf te plannen.\nGezin met twee tieners dat in juli in de bergen wil wandelen.",
 			'button'           => 'Vind reizen',
 			'label'            => 'Beschrijf jullie reis',
 			'hint'             => 'AI-ondersteund zoeken in al onze reizen',
@@ -319,6 +326,7 @@ function cvai_all_strings() {
 		),
 		'fr' => array(
 			'placeholder'      => 'Ex. Nous sommes 6 et souhaitons randonner en Italie en octobre. Nous avons randonné en Autriche de nombreux étés.',
+			'examples'         => "Nous sommes 6 et souhaitons randonner en Italie en octobre. Nous sommes assez expérimentés et avons randonné en Autriche de nombreux étés.\nDeux retraités qui veulent pédaler tranquillement en mai, idéalement avec du vin et de la bonne cuisine.\nJe voudrais un voyage de randonnée accompagné cet automne, sans rien organiser moi-même.\nFamille avec deux ados qui veut randonner en montagne en juillet.",
 			'button'           => 'Trouver des voyages',
 			'label'            => 'Décrivez votre voyage',
 			'hint'             => 'Recherche assistée par IA parmi tous nos voyages',

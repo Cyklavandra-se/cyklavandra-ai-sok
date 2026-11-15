@@ -1,9 +1,4 @@
 <wpml-config>
-	<admin-texts>
-		<key name="cvai_options">
-			<key name="examples" />
-		</key>
-	</admin-texts>
 	<shortcodes>
 		<shortcode>
 			<tag>cv_ai_sok</tag>
