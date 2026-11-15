@@ -21,7 +21,7 @@ resor ur vårt utbud, med en kort motivering till varför varje resa passar.
 
 ## Installation
 
-1. Ladda ner senaste `cyklavandra-ai-sok.zip` under **Releases**.
+1. Ladda ner senaste `cyklavandra-ai-sok.zip` under **Releases** – *inte* "Source code (zip)".
 2. WordPress → Tillägg → Lägg till nytt → Ladda upp tillägg → Aktivera.
    Vid uppdatering väljer du *Ersätt nuvarande med uppladdad*.
 3. Lägg API-nyckeln i `wp-config.php`:
@@ -53,6 +53,7 @@ Shortcode-attribut: `platshallare`, `knapp`, `exempel="nej"`,
 
 ## Versioner
 
+- **1.2.1** – Skydd mot krasch om pluginen är installerad två gånger.
 - **1.2.0** – Färginställningar, hörnradie, bilder av/på, max antal träffar och alternativ. Texten i sökrutan får rätt färg i Avada.
 - **1.1.0** – WPML-stöd: en katalog per språk och texter på åtta språk.
 - **1.0.1** – Strukturerat svar via verktygsanrop (rättar "oväntat svar"). Rubrik och ingress borttagna ur pluginen.

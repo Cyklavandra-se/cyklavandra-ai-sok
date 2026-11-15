@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.2.0
+ * Version:     1.2.1
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -12,7 +12,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'CVAI_VERSION', '1.2.0' );
+// Skydd om pluginen råkar finnas installerad två gånger (t.ex. "Source code"-zip från GitHub).
+if ( defined( 'CVAI_VERSION' ) ) {
+	add_action(
+		'admin_notices',
+		function () {
+			echo '<div class="notice notice-error"><p><strong>AI-sök</strong> är installerad två gånger. Avaktivera och radera den ena kopian under Tillägg.</p></div>';
+		}
+	);
+	return;
+}
+
+define( 'CVAI_VERSION', '1.2.1' );
 define( 'CVAI_DB_VERSION', '2' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
