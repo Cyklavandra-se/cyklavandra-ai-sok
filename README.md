@@ -69,6 +69,7 @@ vanliga uppdateringar under **Tillägg** och **Kontrollpanel → Uppdateringar**
 
 ## Versioner
 
+- **1.4.5** – Egen ikon för pluginen (syns bland uppdateringarna).
 - **1.4.4** – Test av automatisk uppdatering från GitHub. Inga ändringar i funktionen.
 - **1.4.3** – Säkrare uppdateringskoll: reserv om GitHubs API inte svarar och fungerar även om wordpress.org inte svarar. "Sök efter uppdatering" visar resultatet och eventuellt fel.
 - **1.4.2** – Första versionen som släpps automatiskt via Run workflow. Inga ändringar i funktionen.

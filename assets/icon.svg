@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <rect width="256" height="256" rx="48" fill="#2f5d46"/>
+  <!-- berg -->
+  <path d="M20 206 L92 104 L124 146 L156 98 L236 206 Z" fill="#e9efe9"/>
+  <path d="M92 104 L108 127 L98 122 L86 133 L78 124 Z M156 98 L176 126 L164 120 L152 132 L143 118 Z" fill="#ffffff"/>
+  <!-- stig -->
+  <path d="M128 206 C122 188 150 180 140 166" stroke="#2f5d46" stroke-width="7" stroke-linecap="round" fill="none" stroke-dasharray="2 13"/>
+  <!-- förstoringsglas -->
+  <circle cx="160" cy="92" r="44" fill="#2f5d46" fill-opacity=".35" stroke="#c8692c" stroke-width="16"/>
+  <path d="M192 124 L222 154" stroke="#c8692c" stroke-width="20" stroke-linecap="round"/>
+  <!-- AI-gnista -->
+  <path d="M60 36 L67 55 L86 62 L67 69 L60 88 L53 69 L34 62 L53 55 Z" fill="#f4c27a"/>
+</svg>
