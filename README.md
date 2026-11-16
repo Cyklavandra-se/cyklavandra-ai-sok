@@ -59,9 +59,9 @@ vanliga uppdateringar under **Tillägg** och **Kontrollpanel → Uppdateringar**
 1. Höj `Version:` och `CVAI_VERSION` i `cyklavandra-ai-sok.php` och lägg en rad under
    *Versioner* nedan (den blir releasetexten).
 2. Committa och pusha till `main`.
-3. Skapa och pusha taggen: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-   GitHub Actions skapar då releasen, bygger zip-filen och bifogar den.
-   (Det går också att göra som förut: **Releases → Draft a new release** → ny tagg → **Publish**.)
+3. På GitHub: **Actions → Bygg release → Run workflow** (gren `main`). Den skapar taggen
+   `vX.Y.Z` från `Version:`, releasen och zip-filen. Det går också att pusha taggen
+   (`git push origin vX.Y.Z`) eller skapa releasen för hand som förut.
 4. Bygget stoppas om taggen inte stämmer med `Version:`.
 5. Sajten hittar uppdateringen inom 12 timmar, eller direkt via *Sök efter uppdatering*.
 
