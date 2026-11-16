@@ -69,6 +69,7 @@ vanliga uppdateringar under **Tillägg** och **Kontrollpanel → Uppdateringar**
 
 ## Versioner
 
+- **1.4.3** – Säkrare uppdateringskoll: reserv om GitHubs API inte svarar och fungerar även om wordpress.org inte svarar. "Sök efter uppdatering" visar resultatet och eventuellt fel.
 - **1.4.2** – Första versionen som släpps automatiskt via versionstagg. Inga ändringar i funktionen.
 - **1.4.1** – Exempelfrågorna i två kolumner (en på mobil) och döljs när man sökt. Tydligare laddning med snurra och förloppsstapel.
 - **1.4.0** – Automatiska uppdateringar från GitHub-releaser. Länken "Sök efter uppdatering" i tilläggslistan.

@@ -25,7 +25,9 @@ här sökningen ska bli grunden till en ny förstasida.
 - `includes/i18n.php` – alla UI-texter + inbyggda exempelfrågor för sv, nb, da, en, de, fi, nl, fr.
   WPML-koden `no` mappas till `nb`.
 - `includes/updater.php` – uppdateringar från GitHub-releaser via `Update URI` +
-  filtret `update_plugins_github.com`; kräver bifogad `cyklavandra-ai-sok.zip` (cache `cvai_gh_release`).
+  filtret `update_plugins_github.com` (+ `site_transient_update_plugins` som reserv); API med reserv
+  via github.com/…/releases/latest-omdirigeringen; kräver bifogad `cyklavandra-ai-sok.zip`
+  (cache `cvai_gh_release`, senaste kollen i option `cvai_gh_status`).
 - `assets/cvai.js`, `assets/cvai.css` – frontend. CSS-variabler sätts inline från inställningarna.
   Avada skriver över formulärstilar, därav `!important` på textarea/knapp.
 - `wpml-config.xml` – gör shortcode-attribut översättningsbara.
