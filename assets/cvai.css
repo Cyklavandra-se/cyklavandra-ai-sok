@@ -30,7 +30,7 @@
 .cvai-interp{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:22px 0 4px}
 .cvai-interp>span:first-child{font-size:13px;color:var(--cvai-muted);margin-right:4px}
 .cvai-tag{font-size:13px;background:var(--cvai-green2);color:var(--cvai-green);padding:3px 10px;border-radius:99px}
-.cvai-summary{font-size:20px;line-height:1.4;margin:12px 0 10px}
+.cvai .cvai-summary{font-size:20px;line-height:1.4;margin:20px 0 10px!important}
 .cvai-sub{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--cvai-muted);margin:24px 0 10px}
 .cvai-grid{display:grid;gap:14px}
 .cvai-card{display:grid;grid-template-columns:220px 1fr;background:var(--cvai-card);border:1px solid var(--cvai-line);border-radius:var(--cvai-radius);overflow:hidden}
