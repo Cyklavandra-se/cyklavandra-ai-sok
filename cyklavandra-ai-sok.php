@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.4.9
+ * Version:     1.4.10
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.4.9' );
+define( 'CVAI_VERSION', '1.4.10' );
 define( 'CVAI_DB_VERSION', '2' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -320,6 +320,7 @@ function cvai_build_catalog( $lang ) {
 				'img'   => get_the_post_thumbnail_url( $p, 'medium_large' ) ?: '',
 				'meta'  => array_values( array_filter( $meta ) ),
 				'level' => implode( ', ', $levels ),
+				'land'  => array_values( array_unique( array_map( 'mb_strtolower', $land ) ) ),
 			);
 
 			$lines[] = sprintf(
@@ -424,11 +425,12 @@ UPPGIFT:
 6. " . ( (int) cvai_opt( 'max_alts' ) > 0 ? 'Ge även 0–' . (int) cvai_opt( 'max_alts' ) . ' alternativ som nästan passar (annat land, närliggande månad eller lite annan nivå) med en kort förklaring. Finns ingen bra träff, säg det ärligt i sammanfattningen och ge alternativ.' : 'Ge inga alternativ (lämna listan tom). Finns ingen bra träff, säg det ärligt i sammanfattningen.' ) . "
 7. Använd ENDAST id:n ur katalogen. Ange för varje resa både id och namn från samma katalograd, och kontrollera att motiveringen handlar om just den resan. Hitta aldrig på resor, priser eller datum. Nämn bara pris om det står i katalogen.
 8. SPRÅK: Skriv sammanfattning, motiveringar och tolkning på det svarsspråk som anges i kundens meddelande. Om kunden tydligt skriver på ett annat språk, svara på kundens språk. Tilltala kunden med \"ni\"/motsvarande om de är flera, annars \"du\".
-" . ( $extra ? "\nEXTRA REGLER FRÅN CYKLA & VANDRA:\n$extra\n" : '' ) . "
+9. Fyll i \"regler\" i verktyget INNAN du väljer resor: vilka extra regler som gäller för just den här frågan, och vilka länder de utesluter.
+
 Lämna alltid ditt svar genom verktyget visa_resor.
 
 KATALOG:
-" . $catalog_text;
+" . $catalog_text . ( $extra ? "\n\nEXTRA REGLER FRÅN CYKLA & VANDRA – OBLIGATORISKA, de gäller före allt annat ovan:\n$extra\n\nEn resa som bryter mot en extra regel får aldrig visas, varken som träff eller alternativ." : '' );
 }
 
 function cvai_hits_range() {
@@ -461,6 +463,18 @@ function cvai_tool_schema() {
 						'niva'      => array( 'type' => 'string' ),
 						'antal'     => array( 'type' => 'string' ),
 						'ovrigt'    => array( 'type' => 'string' ),
+					),
+				),
+				'regler'         => array(
+					'type'        => 'object',
+					'description' => 'Fylls i före träffarna: vilka extra regler från Cykla & Vandra som gäller för frågan.',
+					'properties'  => array(
+						'tillampade'      => array( 'type' => 'string', 'description' => 'De extra regler som gäller för just den här frågan, kort. Tomt om ingen gäller.' ),
+						'uteslutna_lander' => array(
+							'type'        => 'array',
+							'items'       => array( 'type' => 'string' ),
+							'description' => 'Länder som reglerna utesluter för frågan, stavade som i katalogens taggar (t.ex. sverige, norge, danmark). Tom lista om inga.',
+						),
 					),
 				),
 				'sammanfattning' => array( 'type' => 'string', 'description' => '1–2 varma, konkreta meningar till kunden' ),
@@ -573,7 +587,7 @@ function cvai_rest_search( WP_REST_Request $req ) {
 		'messages'    => array(
 			array(
 				'role'    => 'user',
-				'content' => 'Dagens datum: ' . current_time( 'Y-m-d' ) . "\nSvarsspråk: " . cvai_lang_name( $lang ) . "\n\nKUNDENS BESKRIVNING:\n\"\"\"" . $q . '"""',
+				'content' => 'Dagens datum: ' . current_time( 'Y-m-d' ) . "\nSvarsspråk: " . cvai_lang_name( $lang ) . ( trim( (string) cvai_opt( 'extra_rules' ) ) ? "\nKontrollera de obligatoriska EXTRA REGLERNA innan du väljer resor." : '' ) . "\n\nKUNDENS BESKRIVNING:\n\"\"\"" . $q . '"""',
 			),
 		),
 	);
@@ -626,14 +640,28 @@ function cvai_rest_search( WP_REST_Request $req ) {
 		return cvai_error( 'err_parse', $lang, 502 );
 	}
 
+	// Länder som AI:n själv angett att extraregler utesluter: ta bort sådana resor säkert.
+	$excluded = array();
+	foreach ( (array) ( $data['regler']['uteslutna_lander'] ?? array() ) as $c ) {
+		$c = cvai_norm_title( (string) $c );
+		if ( '' !== $c ) {
+			$excluded = array_merge( $excluded, cvai_country_variants( $c ) );
+		}
+	}
+	$excluded = array_unique( $excluded );
+
 	$fixes = array();
-	$map   = function ( $list ) use ( $catalog, &$fixes ) {
+	$map   = function ( $list ) use ( $catalog, &$fixes, $excluded ) {
 		$out  = array();
 		$seen = array();
 		foreach ( (array) $list as $h ) {
 			$id = cvai_resolve_hit( $catalog['cards'], (string) ( $h['id'] ?? '' ), (string) ( $h['namn'] ?? '' ) );
 			if ( $id !== (string) ( $h['id'] ?? '' ) ) {
 				$fixes[] = ( $h['id'] ?? '?' ) . '→' . ( $id ? $id : 'bort' ) . ' (' . mb_substr( (string) ( $h['namn'] ?? '' ), 0, 60 ) . ')';
+			}
+			if ( $id && $excluded && array_intersect( (array) ( $catalog['cards'][ $id ]['land'] ?? array() ), $excluded ) ) {
+				$fixes[] = $id . '→bort (regel: ' . implode( ', ', array_intersect( $catalog['cards'][ $id ]['land'], $excluded ) ) . ')';
+				continue;
 			}
 			if ( $id && ! isset( $seen[ $id ] ) ) {
 				$seen[ $id ] = true;
@@ -660,7 +688,16 @@ function cvai_rest_search( WP_REST_Request $req ) {
 		}
 	}
 
+	foreach ( array( 'hits', 'alts' ) as $v ) {
+		foreach ( $$v as $i => $h ) {
+			unset( $$v[ $i ]['land'] );
+		}
+	}
+
 	$log_interp = $interp;
+	if ( ! empty( $data['regler']['tillampade'] ) ) {
+		$log_interp['regler'] = sanitize_text_field( (string) $data['regler']['tillampade'] );
+	}
 	if ( $fixes ) {
 		$log_interp['korrigerade_id'] = implode( '; ', $fixes );
 	}
@@ -730,6 +767,29 @@ function cvai_resolve_hit( $cards, $id, $name ) {
 		}
 	}
 	return $top >= 0.6 ? $best : '';
+}
+
+/** Ett land på olika språk, så att \"Norge\" också fångar taggen \"norway\" osv. */
+function cvai_country_variants( $c ) {
+	$groups = array(
+		array( 'sverige', 'sweden', 'schweden', 'ruotsi', 'zweden', 'suède', 'suede' ),
+		array( 'norge', 'norway', 'norwegen', 'norja', 'noorwegen', 'norvège', 'norvege' ),
+		array( 'danmark', 'denmark', 'dänemark', 'tanska', 'denemarken', 'danemark' ),
+		array( 'finland', 'suomi', 'finnland', 'finlande' ),
+		array( 'island', 'iceland', 'islanti', 'ijsland', 'islande' ),
+		array( 'italien', 'italia', 'italy', 'italie', 'italië' ),
+		array( 'spanien', 'spania', 'spain', 'espanja', 'spanje', 'espagne' ),
+		array( 'frankrike', 'france', 'frankreich', 'ranska', 'frankrijk' ),
+		array( 'österrike', 'østerrike', 'østrig', 'austria', 'österreich', 'itävalta', 'oostenrijk', 'autriche' ),
+		array( 'tyskland', 'germany', 'deutschland', 'saksa', 'duitsland', 'allemagne' ),
+		array( 'ungern', 'ungarn', 'hungary', 'unkari', 'hongarije', 'hongrie' ),
+	);
+	foreach ( $groups as $g ) {
+		if ( in_array( $c, $g, true ) ) {
+			return $g;
+		}
+	}
+	return array( $c );
 }
 
 function cvai_log( $lang, $q, $ids, $interp, $ms, $tin, $tout, $status ) {

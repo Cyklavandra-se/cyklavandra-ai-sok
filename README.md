@@ -69,6 +69,7 @@ vanliga uppdateringar under **Tillägg** och **Kontrollpanel → Uppdateringar**
 
 ## Versioner
 
+- **1.4.10** – Extrareglerna följs bättre: de ligger efter katalogen som obligatoriska, AI:n måste ange vilka regler som gäller innan den väljer, och resor i länder som reglerna utesluter tas bort av servern. Tillämpade regler syns i sökhistoriken.
 - **1.4.9** – Ungern och Ecuador får landsetikett på resekorten (alla språk). Katalogen byggs om automatiskt efter en uppdatering av pluginen.
 - **1.4.8** – Skydd mot förväxlade resor: AI:n anger även resans namn och servern rättar id:t om det inte stämmer (t.ex. Galapagos med en motivering om en vinresa). Rättelser syns i sökhistoriken.
 - **1.4.7** – Resekatalogen sparas i 24 timmar i stället för 12 (töms fortfarande direkt när något sparas).
