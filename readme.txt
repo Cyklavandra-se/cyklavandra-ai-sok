@@ -38,7 +38,7 @@ Rubrik och ingress skrivs fritt i Avada ovanför shortcoden.
 * Alla publicerade sidor med taggen "guidad" eller "självguidad" blir katalogen
   (titel, taggar, svårighetstaggar hike1–4/bike1–4 och början av sidtexten).
 * Kommande evenemang i The Events Calendar tas med som guidade avgångar med datum.
-* Katalogen cachas i 12 timmar och byggs om automatiskt när en sida eller tagg sparas.
+* Katalogen cachas i 24 timmar och byggs om automatiskt när en sida eller tagg sparas.
 * Sökningen går via WordPress-servern till Claude – API-nyckeln syns aldrig för besökaren.
 * Spärrar: max sökningar per besökare och timme samt max per dygn (kostnadstak).
 * Sökhistorik sparas utan IP-adress och visas under Inställningar → AI-sök.

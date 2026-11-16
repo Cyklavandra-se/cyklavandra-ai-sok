@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.4.6
+ * Version:     1.4.7
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.4.6' );
+define( 'CVAI_VERSION', '1.4.7' );
 define( 'CVAI_DB_VERSION', '2' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -224,7 +224,7 @@ function cvai_catalog_key( $lang ) {
 
 /**
  * Bygger katalogen för ett språk: text till AI:n + kortdata till frontend.
- * Cachas i 12 timmar och töms när en sida eller tagg sparas.
+ * Cachas i 24 timmar och töms när en sida eller tagg sparas.
  */
 function cvai_get_catalog( $lang = null, $force = false ) {
 	$lang = $lang ? sanitize_key( $lang ) : cvai_current_lang();
@@ -243,7 +243,7 @@ function cvai_get_catalog( $lang = null, $force = false ) {
 			return cvai_build_catalog( $lang );
 		}
 	);
-	set_transient( $key, $catalog, 12 * HOUR_IN_SECONDS );
+	set_transient( $key, $catalog, DAY_IN_SECONDS );
 	return $catalog;
 }
 
