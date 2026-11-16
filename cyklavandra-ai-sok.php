@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.4.8
+ * Version:     1.4.11
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.4.8' );
+define( 'CVAI_VERSION', '1.4.11' );
 define( 'CVAI_DB_VERSION', '2' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -40,7 +40,7 @@ require_once __DIR__ . '/includes/updater.php';
 function cvai_defaults() {
 	return array(
 		'api_key'        => '',
-		'model'          => 'claude-haiku-5-5',
+		'model'          => 'claude-sonnet-5-5',
 		'trip_tags'      => 'guidad, självguidad',
 		'include_events' => 1,
 		'rate_per_hour'  => 20,
@@ -139,6 +139,22 @@ function cvai_in_lang( $lang, $fn ) {
 register_activation_hook( __FILE__, 'cvai_install' );
 add_action( 'plugins_loaded', 'cvai_maybe_upgrade' );
 
+/** Engångsbyte från Haiku till Sonnet 5.5 (1.4.11). Ett annat val i inställningarna lämnas orört. */
+add_action(
+	'plugins_loaded',
+	function () {
+		if ( get_option( 'cvai_model_switch_1411' ) ) {
+			return;
+		}
+		$o = get_option( 'cvai_options', array() );
+		if ( is_array( $o ) && ( $o['model'] ?? '' ) === 'claude-haiku-5-5' ) {
+			$o['model'] = 'claude-sonnet-5-5';
+			update_option( 'cvai_options', $o );
+		}
+		update_option( 'cvai_model_switch_1411', 1, false );
+	}
+);
+
 function cvai_maybe_upgrade() {
 	if ( get_option( 'cvai_db_version' ) !== CVAI_DB_VERSION ) {
 		cvai_install();
@@ -191,7 +207,7 @@ function cvai_vocab() {
 		'self'    => array( 'självguidad', 'sjalvguidad', 'selvguidet', 'selvguidede', 'self-guided', 'selfguided', 'individuell', 'omatoiminen', 'zelfgeleid', 'en liberté', 'autoguidé' ),
 		'hike'    => array( 'vandra', 'vandring', 'vandre', 'fottur', 'hike', 'hiking', 'walking', 'wandern', 'wandelen', 'vaellus', 'randonnée' ),
 		'bike'    => array( 'cykla', 'cykel', 'sykle', 'sykkel', 'sykling', 'cykle', 'cycling', 'bike', 'radfahren', 'fietsen', 'pyöräily', 'vélo' ),
-		'country' => array( 'italien', 'italia', 'italy', 'spanien', 'spania', 'spain', 'frankrike', 'france', 'frankreich', 'portugal', 'österrike', 'østerrike', 'østrig', 'austria', 'österreich', 'tyskland', 'germany', 'deutschland', 'grekland', 'hellas', 'grækenland', 'greece', 'slovenien', 'slovenia', 'kroatien', 'kroatia', 'croatia', 'schweiz', 'sveits', 'switzerland', 'holland', 'nederland', 'belgien', 'belgia', 'danmark', 'sverige', 'norge', 'skottland', 'scotland', 'uk', 'malta', 'bulgarien', 'bulgaria', 'kanarieöarna', 'kanariøyene', 'mallorca', 'costa brava', 'garda', 'kap verde', 'costa rica', 'kuba', 'cuba', 'peru' ),
+		'country' => array( 'italien', 'italia', 'italy', 'spanien', 'spania', 'spain', 'frankrike', 'france', 'frankreich', 'portugal', 'österrike', 'østerrike', 'østrig', 'austria', 'österreich', 'tyskland', 'germany', 'deutschland', 'grekland', 'hellas', 'grækenland', 'greece', 'slovenien', 'slovenia', 'kroatien', 'kroatia', 'croatia', 'schweiz', 'sveits', 'switzerland', 'holland', 'nederland', 'belgien', 'belgia', 'danmark', 'sverige', 'norge', 'skottland', 'scotland', 'uk', 'malta', 'bulgarien', 'bulgaria', 'kanarieöarna', 'kanariøyene', 'mallorca', 'costa brava', 'garda', 'kap verde', 'costa rica', 'kuba', 'cuba', 'peru', 'ungern', 'ungarn', 'hungary', 'unkari', 'hongarije', 'hongrie', 'ecuador' ),
 	);
 }
 
@@ -219,7 +235,8 @@ function cvai_trip_tag_ids( $lang ) {
 }
 
 function cvai_catalog_key( $lang ) {
-	return 'cvai_catalog_' . $lang . '_' . (int) get_option( 'cvai_cat_ver', 1 );
+	// Pluginversionen ingår så att katalogen byggs om efter en uppdatering.
+	return 'cvai_catalog_' . $lang . '_' . (int) get_option( 'cvai_cat_ver', 1 ) . '_' . CVAI_VERSION;
 }
 
 /**
@@ -319,6 +336,7 @@ function cvai_build_catalog( $lang ) {
 				'img'   => get_the_post_thumbnail_url( $p, 'medium_large' ) ?: '',
 				'meta'  => array_values( array_filter( $meta ) ),
 				'level' => implode( ', ', $levels ),
+				'land'  => array_values( array_unique( array_map( 'mb_strtolower', $land ) ) ),
 			);
 
 			$lines[] = sprintf(
@@ -423,11 +441,12 @@ UPPGIFT:
 6. " . ( (int) cvai_opt( 'max_alts' ) > 0 ? 'Ge även 0–' . (int) cvai_opt( 'max_alts' ) . ' alternativ som nästan passar (annat land, närliggande månad eller lite annan nivå) med en kort förklaring. Finns ingen bra träff, säg det ärligt i sammanfattningen och ge alternativ.' : 'Ge inga alternativ (lämna listan tom). Finns ingen bra träff, säg det ärligt i sammanfattningen.' ) . "
 7. Använd ENDAST id:n ur katalogen. Ange för varje resa både id och namn från samma katalograd, och kontrollera att motiveringen handlar om just den resan. Hitta aldrig på resor, priser eller datum. Nämn bara pris om det står i katalogen.
 8. SPRÅK: Skriv sammanfattning, motiveringar och tolkning på det svarsspråk som anges i kundens meddelande. Om kunden tydligt skriver på ett annat språk, svara på kundens språk. Tilltala kunden med \"ni\"/motsvarande om de är flera, annars \"du\".
-" . ( $extra ? "\nEXTRA REGLER FRÅN CYKLA & VANDRA:\n$extra\n" : '' ) . "
-Lämna alltid ditt svar genom verktyget visa_resor.
+9. Fyll i \"regler\" i verktyget INNAN du väljer resor: vilka extra regler som gäller för just den här frågan, och vilka länder de utesluter.
+
+Svara ALLTID genom att anropa verktyget visa_resor, exakt en gång, och skriv ingen annan text.
 
 KATALOG:
-" . $catalog_text;
+" . $catalog_text . ( $extra ? "\n\nEXTRA REGLER FRÅN CYKLA & VANDRA – OBLIGATORISKA, de gäller före allt annat ovan:\n$extra\n\nEn resa som bryter mot en extra regel får aldrig visas, varken som träff eller alternativ." : '' );
 }
 
 function cvai_hits_range() {
@@ -460,6 +479,18 @@ function cvai_tool_schema() {
 						'niva'      => array( 'type' => 'string' ),
 						'antal'     => array( 'type' => 'string' ),
 						'ovrigt'    => array( 'type' => 'string' ),
+					),
+				),
+				'regler'         => array(
+					'type'        => 'object',
+					'description' => 'Fylls i före träffarna: vilka extra regler från Cykla & Vandra som gäller för frågan.',
+					'properties'  => array(
+						'tillampade'      => array( 'type' => 'string', 'description' => 'De extra regler som gäller för just den här frågan, kort. Tomt om ingen gäller.' ),
+						'uteslutna_lander' => array(
+							'type'        => 'array',
+							'items'       => array( 'type' => 'string' ),
+							'description' => 'Länder som reglerna utesluter för frågan, stavade som i katalogens taggar (t.ex. sverige, norge, danmark). Tom lista om inga.',
+						),
 					),
 				),
 				'sammanfattning' => array( 'type' => 'string', 'description' => '1–2 varma, konkreta meningar till kunden' ),
@@ -559,9 +590,10 @@ function cvai_rest_search( WP_REST_Request $req ) {
 
 	$body = array(
 		'model'       => cvai_opt( 'model' ),
-		'max_tokens'  => 2000,
+		'max_tokens'  => 8000, // plats för tänkande + svar
 		'tools'       => array( cvai_tool_schema() ),
-		'tool_choice' => array( 'type' => 'tool', 'name' => 'visa_resor' ),
+		// Sonnet/Opus 5.5 tillåter inte tvingat verktyg; prompten kräver visa_resor.
+		'tool_choice' => array( 'type' => 'auto' ),
 		'system'      => array(
 			array(
 				'type'          => 'text',
@@ -572,10 +604,15 @@ function cvai_rest_search( WP_REST_Request $req ) {
 		'messages'    => array(
 			array(
 				'role'    => 'user',
-				'content' => 'Dagens datum: ' . current_time( 'Y-m-d' ) . "\nSvarsspråk: " . cvai_lang_name( $lang ) . "\n\nKUNDENS BESKRIVNING:\n\"\"\"" . $q . '"""',
+				'content' => 'Dagens datum: ' . current_time( 'Y-m-d' ) . "\nSvarsspråk: " . cvai_lang_name( $lang ) . ( trim( (string) cvai_opt( 'extra_rules' ) ) ? "\nKontrollera de obligatoriska EXTRA REGLERNA innan du väljer resor." : '' ) . "\n\nKUNDENS BESKRIVNING:\n\"\"\"" . $q . '"""',
 			),
 		),
 	);
+
+	// Låg ansträngning = snabbare svar. Stöds av generation 5-modellerna.
+	if ( preg_match( '/^claude-(opus|sonnet|haiku|fable|mythos)-5/', (string) $body['model'] ) ) {
+		$body['output_config'] = array( 'effort' => 'low' );
+	}
 
 	$resp = wp_remote_post(
 		'https://api.anthropic.com/v1/messages',
@@ -625,14 +662,28 @@ function cvai_rest_search( WP_REST_Request $req ) {
 		return cvai_error( 'err_parse', $lang, 502 );
 	}
 
+	// Länder som AI:n själv angett att extraregler utesluter: ta bort sådana resor säkert.
+	$excluded = array();
+	foreach ( (array) ( $data['regler']['uteslutna_lander'] ?? array() ) as $c ) {
+		$c = cvai_norm_title( (string) $c );
+		if ( '' !== $c ) {
+			$excluded = array_merge( $excluded, cvai_country_variants( $c ) );
+		}
+	}
+	$excluded = array_unique( $excluded );
+
 	$fixes = array();
-	$map   = function ( $list ) use ( $catalog, &$fixes ) {
+	$map   = function ( $list ) use ( $catalog, &$fixes, $excluded ) {
 		$out  = array();
 		$seen = array();
 		foreach ( (array) $list as $h ) {
 			$id = cvai_resolve_hit( $catalog['cards'], (string) ( $h['id'] ?? '' ), (string) ( $h['namn'] ?? '' ) );
 			if ( $id !== (string) ( $h['id'] ?? '' ) ) {
 				$fixes[] = ( $h['id'] ?? '?' ) . '→' . ( $id ? $id : 'bort' ) . ' (' . mb_substr( (string) ( $h['namn'] ?? '' ), 0, 60 ) . ')';
+			}
+			if ( $id && $excluded && array_intersect( (array) ( $catalog['cards'][ $id ]['land'] ?? array() ), $excluded ) ) {
+				$fixes[] = $id . '→bort (regel: ' . implode( ', ', array_intersect( $catalog['cards'][ $id ]['land'], $excluded ) ) . ')';
+				continue;
 			}
 			if ( $id && ! isset( $seen[ $id ] ) ) {
 				$seen[ $id ] = true;
@@ -659,7 +710,16 @@ function cvai_rest_search( WP_REST_Request $req ) {
 		}
 	}
 
+	foreach ( array( 'hits', 'alts' ) as $v ) {
+		foreach ( $$v as $i => $h ) {
+			unset( $$v[ $i ]['land'] );
+		}
+	}
+
 	$log_interp = $interp;
+	if ( ! empty( $data['regler']['tillampade'] ) ) {
+		$log_interp['regler'] = sanitize_text_field( (string) $data['regler']['tillampade'] );
+	}
 	if ( $fixes ) {
 		$log_interp['korrigerade_id'] = implode( '; ', $fixes );
 	}
@@ -729,6 +789,29 @@ function cvai_resolve_hit( $cards, $id, $name ) {
 		}
 	}
 	return $top >= 0.6 ? $best : '';
+}
+
+/** Ett land på olika språk, så att \"Norge\" också fångar taggen \"norway\" osv. */
+function cvai_country_variants( $c ) {
+	$groups = array(
+		array( 'sverige', 'sweden', 'schweden', 'ruotsi', 'zweden', 'suède', 'suede' ),
+		array( 'norge', 'norway', 'norwegen', 'norja', 'noorwegen', 'norvège', 'norvege' ),
+		array( 'danmark', 'denmark', 'dänemark', 'tanska', 'denemarken', 'danemark' ),
+		array( 'finland', 'suomi', 'finnland', 'finlande' ),
+		array( 'island', 'iceland', 'islanti', 'ijsland', 'islande' ),
+		array( 'italien', 'italia', 'italy', 'italie', 'italië' ),
+		array( 'spanien', 'spania', 'spain', 'espanja', 'spanje', 'espagne' ),
+		array( 'frankrike', 'france', 'frankreich', 'ranska', 'frankrijk' ),
+		array( 'österrike', 'østerrike', 'østrig', 'austria', 'österreich', 'itävalta', 'oostenrijk', 'autriche' ),
+		array( 'tyskland', 'germany', 'deutschland', 'saksa', 'duitsland', 'allemagne' ),
+		array( 'ungern', 'ungarn', 'hungary', 'unkari', 'hongarije', 'hongrie' ),
+	);
+	foreach ( $groups as $g ) {
+		if ( in_array( $c, $g, true ) ) {
+			return $g;
+		}
+	}
+	return array( $c );
 }
 
 function cvai_log( $lang, $q, $ids, $interp, $ms, $tin, $tout, $status ) {
@@ -986,7 +1069,7 @@ function cvai_admin_page() {
 						<p class="description">Säkrast är att i stället lägga <code>define( 'CVAI_API_KEY', 'sk-ant-…' );</code> i wp-config.php.</p>
 					<?php endif; ?>
 				</td></tr>
-				<tr><th>Modell</th><td><input class="regular-text" name="cvai_options[model]" value="<?php echo esc_attr( $o['model'] ); ?>"><p class="description">Standard: <code>claude-haiku-5-5</code> (snabb och billig). <code>claude-sonnet-5-5</code> ger lite bättre motiveringar men kostar mer.</p></td></tr>
+				<tr><th>Modell</th><td><input class="regular-text" name="cvai_options[model]" value="<?php echo esc_attr( $o['model'] ); ?>"><p class="description">Standard: <code>claude-sonnet-5-5</code> (följer reglerna bra, ca 0,20–1,20 kr per sökning). <code>claude-haiku-5-5</code> är billigast men följer extraregler sämre. <code>claude-opus-5-5</code> är dyrast och långsammast.</p></td></tr>
 				<tr><th>Taggar som markerar en resa</th><td><input class="regular-text" name="cvai_options[trip_tags]" value="<?php echo esc_attr( $o['trip_tags'] ); ?>"><p class="description">Kommaseparerat, på huvudspråket. Översatta taggar i WPML hittas automatiskt. Vanliga varianter (guidet, selvguidet, guided, self-guided m.fl.) känns också igen. Lägg till fler namn här om ett språk använder andra ord.</p></td></tr>
 				<tr><th>Guidade avgångar</th><td><label><input type="checkbox" name="cvai_options[include_events]" value="1" <?php checked( $o['include_events'] ); ?>> Ta med kommande evenemang från The Events Calendar</label></td></tr>
 				<tr><th>Max sökningar per besökare/timme</th><td><input type="number" min="1" name="cvai_options[rate_per_hour]" value="<?php echo (int) $o['rate_per_hour']; ?>"></td></tr>
