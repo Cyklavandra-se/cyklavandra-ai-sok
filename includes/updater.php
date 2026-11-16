@@ -18,8 +18,11 @@ define( 'CVAI_UPDATE_SLUG', 'cyklavandra-ai-sok' );
 
 /**
  * Senaste releasen som har en färdig zip, eller null.
- * Cachas 6 timmar (1 timme om inget hittades) för att inte slå i GitHubs gräns
- * på 60 anrop/timme utan inloggning.
+ * Frågar först GitHubs API (ger releasetexten). Om det misslyckas – t.ex. för att
+ * webbhotellets IP-adress slagit i API:ets gräns på 60 anrop/timme – läses
+ * versionen i stället från omdirigeringen på github.com/…/releases/latest.
+ * Cachas 6 timmar (1 timme om inget hittades). Senaste kollen sparas i
+ * optionen cvai_gh_status så att den kan visas i admin.
  *
  * @return array|null { version, package, url, changelog, published }
  */
@@ -29,39 +32,145 @@ function cvai_updater_release( $force = false ) {
 		return empty( $cached['version'] ) ? null : $cached;
 	}
 
-	$release = array();
-	$res     = wp_remote_get(
-		'https://api.github.com/repos/' . CVAI_GITHUB_REPO . '/releases/latest',
-		array(
-			'timeout' => 10,
-			'headers' => array(
-				'Accept'     => 'application/vnd.github+json',
-				'User-Agent' => 'cyklavandra-ai-sok/' . CVAI_VERSION,
-			),
-		)
-	);
-
-	if ( ! is_wp_error( $res ) && 200 === (int) wp_remote_retrieve_response_code( $res ) ) {
-		$data = json_decode( wp_remote_retrieve_body( $res ), true );
-		if ( is_array( $data ) && empty( $data['draft'] ) && empty( $data['prerelease'] ) && ! empty( $data['tag_name'] ) ) {
-			foreach ( (array) ( $data['assets'] ?? array() ) as $asset ) {
-				if ( isset( $asset['name'], $asset['browser_download_url'] ) && CVAI_UPDATE_ASSET === $asset['name'] ) {
-					$release = array(
-						'version'   => ltrim( (string) $data['tag_name'], 'vV' ),
-						'package'   => (string) $asset['browser_download_url'],
-						'url'       => (string) ( $data['html_url'] ?? 'https://github.com/' . CVAI_GITHUB_REPO ),
-						'changelog' => (string) ( $data['body'] ?? '' ),
-						'published' => (string) ( $data['published_at'] ?? '' ),
-					);
-					break;
-				}
-			}
-		}
+	$errors  = array();
+	$release = cvai_updater_from_api( $errors );
+	if ( ! $release ) {
+		$release = cvai_updater_from_web( $errors );
 	}
+
+	update_option(
+		'cvai_gh_status',
+		array(
+			'time'    => time(),
+			'version' => $release ? $release['version'] : '',
+			'source'  => $release ? $release['source'] : '',
+			'errors'  => $errors,
+		),
+		false
+	);
 
 	set_site_transient( 'cvai_gh_release', $release, $release ? 6 * HOUR_IN_SECONDS : HOUR_IN_SECONDS );
 	return $release ? $release : null;
 }
+
+function cvai_updater_http_args( $extra = array(), $api = false ) {
+	$headers = array( 'User-Agent' => 'cyklavandra-ai-sok/' . CVAI_VERSION );
+	if ( $api ) {
+		$headers['Accept'] = 'application/vnd.github+json';
+	}
+	return array_merge( array( 'timeout' => 15, 'headers' => $headers ), $extra );
+}
+
+function cvai_updater_http_error( $label, $res ) {
+	if ( is_wp_error( $res ) ) {
+		return $label . ': ' . $res->get_error_message();
+	}
+	$msg  = $label . ': HTTP ' . wp_remote_retrieve_response_code( $res );
+	$body = json_decode( wp_remote_retrieve_body( $res ), true );
+	if ( is_array( $body ) && ! empty( $body['message'] ) ) {
+		$msg .= ' – ' . mb_substr( (string) $body['message'], 0, 160 );
+	}
+	return $msg;
+}
+
+/** Via GitHubs API. */
+function cvai_updater_from_api( &$errors ) {
+	$res = wp_remote_get( 'https://api.github.com/repos/' . CVAI_GITHUB_REPO . '/releases/latest', cvai_updater_http_args( array(), true ) );
+	if ( is_wp_error( $res ) || 200 !== (int) wp_remote_retrieve_response_code( $res ) ) {
+		$errors[] = cvai_updater_http_error( 'GitHub API', $res );
+		return null;
+	}
+	$data = json_decode( wp_remote_retrieve_body( $res ), true );
+	if ( ! is_array( $data ) || empty( $data['tag_name'] ) ) {
+		$errors[] = 'GitHub API: oväntat svar.';
+		return null;
+	}
+	foreach ( (array) ( $data['assets'] ?? array() ) as $asset ) {
+		if ( isset( $asset['name'], $asset['browser_download_url'] ) && CVAI_UPDATE_ASSET === $asset['name'] ) {
+			return array(
+				'version'   => ltrim( (string) $data['tag_name'], 'vV' ),
+				'package'   => (string) $asset['browser_download_url'],
+				'url'       => (string) ( $data['html_url'] ?? 'https://github.com/' . CVAI_GITHUB_REPO ),
+				'changelog' => (string) ( $data['body'] ?? '' ),
+				'published' => (string) ( $data['published_at'] ?? '' ),
+				'source'    => 'api',
+			);
+		}
+	}
+	$errors[] = 'GitHub API: releasen ' . $data['tag_name'] . ' saknar ' . CVAI_UPDATE_ASSET . '.';
+	return null;
+}
+
+/** Reserv utan API: följ inte omdirigeringen, läs taggen ur Location. */
+function cvai_updater_from_web( &$errors ) {
+	$base = 'https://github.com/' . CVAI_GITHUB_REPO . '/releases';
+	$res  = wp_remote_head( $base . '/latest', cvai_updater_http_args( array( 'redirection' => 0 ) ) );
+	$loc  = is_wp_error( $res ) ? '' : (string) wp_remote_retrieve_header( $res, 'location' );
+	if ( ! preg_match( '#/releases/tag/(v?\d+(?:\.\d+)*)$#', $loc, $m ) ) {
+		$errors[] = $loc ? 'github.com: oväntad adress ' . $loc : cvai_updater_http_error( 'github.com', $res );
+		return null;
+	}
+	$tag     = $m[1];
+	$package = $base . '/download/' . $tag . '/' . CVAI_UPDATE_ASSET;
+	$check   = wp_remote_head( $package, cvai_updater_http_args( array( 'redirection' => 0 ) ) );
+	$code    = is_wp_error( $check ) ? 0 : (int) wp_remote_retrieve_response_code( $check );
+	if ( $code < 200 || $code >= 400 ) {
+		$errors[] = cvai_updater_http_error( 'github.com zip', $check );
+		return null;
+	}
+	return array(
+		'version'   => ltrim( $tag, 'vV' ),
+		'package'   => $package,
+		'url'       => $base . '/tag/' . $tag,
+		'changelog' => '',
+		'published' => '',
+		'source'    => 'web',
+	);
+}
+
+/** Uppdateringsobjektet WordPress vill ha för vår plugin. */
+function cvai_updater_item( $release ) {
+	return (object) array(
+		'id'           => 'https://github.com/' . CVAI_GITHUB_REPO,
+		'slug'         => CVAI_UPDATE_SLUG,
+		'plugin'       => plugin_basename( CVAI_FILE ),
+		'version'      => $release['version'],
+		'new_version'  => $release['version'],
+		'url'          => $release['url'],
+		'package'      => $release['package'],
+		'requires_php' => '7.4',
+		'icons'        => array(),
+		'banners'      => array(),
+		'tested'       => '',
+	);
+}
+
+/**
+ * Extra säkerhet: WordPress hoppar över Update URI-kollen om anropet till
+ * wordpress.org misslyckas. Lägg därför in vår uppdatering när listan läses
+ * (bara i admin och cron, och bara från cachen eller en kontroll per timme).
+ */
+add_filter(
+	'site_transient_update_plugins',
+	function ( $value ) {
+		if ( ! is_object( $value ) || ! ( is_admin() || wp_doing_cron() ) ) {
+			return $value;
+		}
+		$file = plugin_basename( CVAI_FILE );
+		if ( isset( $value->response[ $file ] ) ) {
+			return $value;
+		}
+		$release = cvai_updater_release();
+		if ( $release && version_compare( $release['version'], CVAI_VERSION, '>' ) ) {
+			if ( ! isset( $value->response ) || ! is_array( $value->response ) ) {
+				$value->response = array();
+			}
+			$value->response[ $file ] = cvai_updater_item( $release );
+			unset( $value->no_update[ $file ] );
+		}
+		return $value;
+	}
+);
 
 /**
  * Svarar WordPress när den letar efter uppdateringar för tillägg med Update URI på github.com.
@@ -78,14 +187,7 @@ add_filter(
 		if ( ! $release ) {
 			return $update;
 		}
-		return array(
-			'id'           => 'https://github.com/' . CVAI_GITHUB_REPO,
-			'slug'         => CVAI_UPDATE_SLUG,
-			'version'      => $release['version'],
-			'url'          => $release['url'],
-			'package'      => $release['package'],
-			'requires_php' => '7.4',
-		);
+		return (array) cvai_updater_item( $release );
 	},
 	10,
 	3
@@ -186,9 +288,39 @@ add_action(
 		}
 		check_admin_referer( 'cvai_check_update' );
 		delete_site_transient( 'cvai_gh_release' );
+		cvai_updater_release( true );
 		delete_site_transient( 'update_plugins' );
 		wp_update_plugins();
-		wp_safe_redirect( admin_url( 'plugins.php' ) );
+		wp_safe_redirect( admin_url( 'plugins.php?cvai_checked=1' ) );
 		exit;
+	}
+);
+
+/**
+ * Visar resultatet av "Sök efter uppdatering" överst i tilläggslistan.
+ */
+add_action(
+	'admin_notices',
+	function () {
+		if ( empty( $_GET['cvai_checked'] ) || ! current_user_can( 'update_plugins' ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+			return;
+		}
+		$st      = get_option( 'cvai_gh_status', array() );
+		$found   = $st['version'] ?? '';
+		$errors  = (array) ( $st['errors'] ?? array() );
+		$newer   = $found && version_compare( $found, CVAI_VERSION, '>' );
+		$class   = $found ? ( $newer ? 'notice-info' : 'notice-success' ) : 'notice-error';
+		$msg     = '<strong>AI-sök:</strong> installerad version ' . esc_html( CVAI_VERSION ) . '. ';
+		if ( ! $found ) {
+			$msg .= 'Kunde inte läsa senaste versionen från GitHub.';
+		} elseif ( $newer ) {
+			$msg .= 'Version ' . esc_html( $found ) . ' finns – se raden för AI-sök nedan.';
+		} else {
+			$msg .= 'Senaste på GitHub är ' . esc_html( $found ) . ', du har den senaste.';
+		}
+		if ( $errors ) {
+			$msg .= '<br><small>' . implode( '<br>', array_map( 'esc_html', $errors ) ) . '</small>';
+		}
+		echo '<div class="notice ' . esc_attr( $class ) . ' is-dismissible"><p>' . $msg . '</p></div>'; // phpcs:ignore WordPress.Security.EscapeOutput
 	}
 );
