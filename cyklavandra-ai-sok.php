@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.4.11
+ * Version:     1.4.12
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.4.11' );
+define( 'CVAI_VERSION', '1.4.12' );
 define( 'CVAI_DB_VERSION', '2' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -437,11 +437,10 @@ UPPGIFT:
 2. Översätt erfarenhet till nivå. Exempel: \"många somrar i Österrike/Alperna\", \"vana vandrare\" = nivå 2–3; \"lugnt\", \"ovana\", \"pensionärer som tar det lugnt\" = nivå 1–2. Nivå 4 bara om kunden tydligt söker utmaning.
 3. Välj " . cvai_hits_range() . " resor som passar bäst. Resan ska gå att göra den månad kunden önskar: läs månadstaggar, säsongstaggar och datum i texten (taggarna kan vara på olika språk). Om en önskad månad redan har passerat i år gäller nästa år. Guidade resor med datum som har passerat får inte rekommenderas.
 4. Finns en kommande guidad avgång (id som börjar på E) som passar, föredra den framför resans allmänna sida.
-5. För grupper på 4 personer eller fler: resor på egen hand fungerar utmärkt som eget gäng med valfritt startdatum – nämn det gärna.
-6. " . ( (int) cvai_opt( 'max_alts' ) > 0 ? 'Ge även 0–' . (int) cvai_opt( 'max_alts' ) . ' alternativ som nästan passar (annat land, närliggande månad eller lite annan nivå) med en kort förklaring. Finns ingen bra träff, säg det ärligt i sammanfattningen och ge alternativ.' : 'Ge inga alternativ (lämna listan tom). Finns ingen bra träff, säg det ärligt i sammanfattningen.' ) . "
-7. Använd ENDAST id:n ur katalogen. Ange för varje resa både id och namn från samma katalograd, och kontrollera att motiveringen handlar om just den resan. Hitta aldrig på resor, priser eller datum. Nämn bara pris om det står i katalogen.
-8. SPRÅK: Skriv sammanfattning, motiveringar och tolkning på det svarsspråk som anges i kundens meddelande. Om kunden tydligt skriver på ett annat språk, svara på kundens språk. Tilltala kunden med \"ni\"/motsvarande om de är flera, annars \"du\".
-9. Fyll i \"regler\" i verktyget INNAN du väljer resor: vilka extra regler som gäller för just den här frågan, och vilka länder de utesluter.
+5. " . ( (int) cvai_opt( 'max_alts' ) > 0 ? 'Ge även 0–' . (int) cvai_opt( 'max_alts' ) . ' alternativ som nästan passar (annat land, närliggande månad eller lite annan nivå) med en kort förklaring. Finns ingen bra träff, säg det ärligt i sammanfattningen och ge alternativ.' : 'Ge inga alternativ (lämna listan tom). Finns ingen bra träff, säg det ärligt i sammanfattningen.' ) . "
+6. Använd ENDAST id:n ur katalogen. Ange för varje resa både id och namn från samma katalograd, och kontrollera att motiveringen handlar om just den resan. Hitta aldrig på resor, priser, datum eller avresedagar, och lova inte valfritt startdatum om det inte står i katalogen. Nämn bara pris om det står i katalogen.
+7. SPRÅK: Skriv sammanfattning, motiveringar och tolkning på det svarsspråk som anges i kundens meddelande. Om kunden tydligt skriver på ett annat språk, svara på kundens språk. Tilltala kunden med \"ni\"/motsvarande om de är flera, annars \"du\".
+8. Fyll i \"regler\" i verktyget INNAN du väljer resor: vilka extra regler som gäller för just den här frågan, och vilka länder de utesluter.
 
 Svara ALLTID genom att anropa verktyget visa_resor, exakt en gång, och skriv ingen annan text.
 
