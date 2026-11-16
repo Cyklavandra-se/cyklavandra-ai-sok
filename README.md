@@ -56,12 +56,13 @@ vanliga uppdateringar under **Tillägg** och **Kontrollpanel → Uppdateringar**
 
 ## Ny version
 
-1. Höj `Version:` och `CVAI_VERSION` i `cyklavandra-ai-sok.php`.
+1. Höj `Version:` och `CVAI_VERSION` i `cyklavandra-ai-sok.php` och lägg en rad under
+   *Versioner* nedan (den blir releasetexten).
 2. Committa och pusha till `main`.
-3. På GitHub: **Releases → Draft a new release** → skapa taggen `vX.Y.Z` (samma som
-   `Version:`) → **Publish release**. Texten i releasen visas under "Visa detaljer" i WordPress.
-4. GitHub Actions bygger zip-filen och bifogar den till releasen efter någon minut.
-   Bygget stoppas om taggen inte stämmer med `Version:`.
+3. Skapa och pusha taggen: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+   GitHub Actions skapar då releasen, bygger zip-filen och bifogar den.
+   (Det går också att göra som förut: **Releases → Draft a new release** → ny tagg → **Publish**.)
+4. Bygget stoppas om taggen inte stämmer med `Version:`.
 5. Sajten hittar uppdateringen inom 12 timmar, eller direkt via *Sök efter uppdatering*.
 
 **Lägg aldrig API-nycklar eller lösenord i repot.**

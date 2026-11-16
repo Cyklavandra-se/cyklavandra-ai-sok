@@ -47,12 +47,13 @@ Mocka Anthropic-anropet med filtret `pre_http_request` och WPML med filtren
 
 ## Release
 
-1. Pusha till `main`.
-2. På GitHub: Releases → Draft a new release → ny tagg `vX.Y.Z` → Publish.
-3. `.github/workflows/release.yml` bygger `cyklavandra-ai-sok.zip` och bifogar den.
-4. Sajter med 1.4.0+ får uppdateringen automatiskt (taggen måste stämma med `Version:`,
-   annars stoppar workflowen). Äldre: Tillägg → Ladda upp → "Ersätt nuvarande med uppladdad"
-   med `cyklavandra-ai-sok.zip`, **inte** "Source code (zip)".
+1. Höj versionen och lägg raden i README "Versioner" (blir releasetexten). Pusha till `main`
+   (via PR om Pär vill granska).
+2. `git tag vX.Y.Z <commit på main> && git push origin vX.Y.Z` – `.github/workflows/release.yml`
+   skapar releasen, bygger `cyklavandra-ai-sok.zip` och bifogar den. Taggen måste stämma med
+   `Version:`, annars stoppar workflowen. (Manuell release i GitHub fungerar också.)
+3. Sajter med 1.4.0+ får uppdateringen automatiskt. Äldre: Tillägg → Ladda upp →
+   "Ersätt nuvarande med uppladdad" med `cyklavandra-ai-sok.zip`, **inte** "Source code (zip)".
 
 ## Idéer framåt
 
