@@ -63,7 +63,10 @@
 			var b = document.createElement('button');
 			b.type = 'button';
 			b.className = 'cvai-chip';
-			b.textContent = e.length > 62 ? e.slice(0, 60) + '…' : e;
+			var span = document.createElement('span');
+			span.className = 'cvai-chip-t';
+			span.textContent = e;
+			b.appendChild(span);
 			b.title = e;
 			b.addEventListener('click', function () { q.value = e; run(); });
 			chips.appendChild(b);
@@ -78,7 +81,12 @@
 			busy = true;
 			btn.disabled = true;
 			root.querySelector('.cvai-out').innerHTML = '';
-			status.innerHTML = '<span class="cvai-loading">' + esc(t('loading', 'Letar bland våra resor')) + '</span>';
+			if (chips) chips.hidden = true;
+			status.innerHTML = '<div class="cvai-loading">' +
+				'<span class="cvai-spin" aria-hidden="true"></span>' +
+				'<span class="cvai-loading-txt">' + esc(t('loading', 'Letar bland våra resor')) + '</span>' +
+				'<span class="cvai-bar" aria-hidden="true"><span></span></span></div>';
+			if (window.innerWidth < 800 && status.scrollIntoView) status.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
 			fetch(data.endpoint, {
 				method: 'POST',
@@ -95,6 +103,7 @@
 					if (top && top.scrollIntoView && window.innerWidth < 800) top.scrollIntoView({ behavior: 'smooth', block: 'start' });
 				})
 				.catch(function (e) {
+					if (chips) chips.hidden = false;
 					status.innerHTML = '<span class="cvai-err">' + esc(e.message || t('err_generic', 'Något gick fel. Försök igen.')) + '</span>';
 				})
 				.then(function () { busy = false; btn.disabled = false; });
