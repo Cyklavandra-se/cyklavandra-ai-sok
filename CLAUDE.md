@@ -49,6 +49,9 @@ Mocka Anthropic-anropet med filtret `pre_http_request` och WPML med filtren
 
 ## Release
 
+**Släpp aldrig en ny version (merge till `main` + release) förrän Pär uttryckligen ber om det.**
+Gör ändringarna klara på grenen, visa vad som ändrats och vänta på "släpp".
+
 1. Höj versionen och lägg raden i README "Versioner" (blir releasetexten). Pusha till `main`
    (via PR om Pär vill granska).
 2. Starta workflowen `release.yml` på `main` (GitHub MCP `actions_run_trigger`, `run_workflow`).

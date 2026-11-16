@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.4.6
+ * Version:     1.4.8
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.4.6' );
+define( 'CVAI_VERSION', '1.4.8' );
 define( 'CVAI_DB_VERSION', '2' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -224,7 +224,7 @@ function cvai_catalog_key( $lang ) {
 
 /**
  * Bygger katalogen för ett språk: text till AI:n + kortdata till frontend.
- * Cachas i 12 timmar och töms när en sida eller tagg sparas.
+ * Cachas i 24 timmar och töms när en sida eller tagg sparas.
  */
 function cvai_get_catalog( $lang = null, $force = false ) {
 	$lang = $lang ? sanitize_key( $lang ) : cvai_current_lang();
@@ -243,7 +243,7 @@ function cvai_get_catalog( $lang = null, $force = false ) {
 			return cvai_build_catalog( $lang );
 		}
 	);
-	set_transient( $key, $catalog, 12 * HOUR_IN_SECONDS );
+	set_transient( $key, $catalog, DAY_IN_SECONDS );
 	return $catalog;
 }
 
@@ -421,7 +421,7 @@ UPPGIFT:
 4. Finns en kommande guidad avgång (id som börjar på E) som passar, föredra den framför resans allmänna sida.
 5. För grupper på 4 personer eller fler: resor på egen hand fungerar utmärkt som eget gäng med valfritt startdatum – nämn det gärna.
 6. " . ( (int) cvai_opt( 'max_alts' ) > 0 ? 'Ge även 0–' . (int) cvai_opt( 'max_alts' ) . ' alternativ som nästan passar (annat land, närliggande månad eller lite annan nivå) med en kort förklaring. Finns ingen bra träff, säg det ärligt i sammanfattningen och ge alternativ.' : 'Ge inga alternativ (lämna listan tom). Finns ingen bra träff, säg det ärligt i sammanfattningen.' ) . "
-7. Använd ENDAST id:n ur katalogen. Hitta aldrig på resor, priser eller datum. Nämn bara pris om det står i katalogen.
+7. Använd ENDAST id:n ur katalogen. Ange för varje resa både id och namn från samma katalograd, och kontrollera att motiveringen handlar om just den resan. Hitta aldrig på resor, priser eller datum. Nämn bara pris om det står i katalogen.
 8. SPRÅK: Skriv sammanfattning, motiveringar och tolkning på det svarsspråk som anges i kundens meddelande. Om kunden tydligt skriver på ett annat språk, svara på kundens språk. Tilltala kunden med \"ni\"/motsvarande om de är flera, annars \"du\".
 " . ( $extra ? "\nEXTRA REGLER FRÅN CYKLA & VANDRA:\n$extra\n" : '' ) . "
 Lämna alltid ditt svar genom verktyget visa_resor.
@@ -440,9 +440,10 @@ function cvai_tool_schema() {
 		'type'       => 'object',
 		'properties' => array(
 			'id'         => array( 'type' => 'string', 'description' => 'Id ur katalogen, t.ex. P123 eller E456' ),
+			'namn'       => array( 'type' => 'string', 'description' => 'Resans namn exakt som det står i katalogen på samma rad som id:t' ),
 			'motivering' => array( 'type' => 'string', 'description' => '1–2 meningar till kunden om varför resan passar' ),
 		),
-		'required'   => array( 'id', 'motivering' ),
+		'required'   => array( 'id', 'namn', 'motivering' ),
 	);
 	return array(
 		'name'         => 'visa_resor',
@@ -624,12 +625,18 @@ function cvai_rest_search( WP_REST_Request $req ) {
 		return cvai_error( 'err_parse', $lang, 502 );
 	}
 
-	$map = function ( $list ) use ( $catalog ) {
-		$out = array();
+	$fixes = array();
+	$map   = function ( $list ) use ( $catalog, &$fixes ) {
+		$out  = array();
+		$seen = array();
 		foreach ( (array) $list as $h ) {
-			$id = isset( $h['id'] ) ? (string) $h['id'] : '';
-			if ( isset( $catalog['cards'][ $id ] ) ) {
-				$out[] = array_merge( $catalog['cards'][ $id ], array( 'id' => $id, 'why' => sanitize_text_field( $h['motivering'] ?? '' ) ) );
+			$id = cvai_resolve_hit( $catalog['cards'], (string) ( $h['id'] ?? '' ), (string) ( $h['namn'] ?? '' ) );
+			if ( $id !== (string) ( $h['id'] ?? '' ) ) {
+				$fixes[] = ( $h['id'] ?? '?' ) . '→' . ( $id ? $id : 'bort' ) . ' (' . mb_substr( (string) ( $h['namn'] ?? '' ), 0, 60 ) . ')';
+			}
+			if ( $id && ! isset( $seen[ $id ] ) ) {
+				$seen[ $id ] = true;
+				$out[]       = array_merge( $catalog['cards'][ $id ], array( 'id' => $id, 'why' => sanitize_text_field( $h['motivering'] ?? '' ) ) );
 			}
 		}
 		return $out;
@@ -652,7 +659,11 @@ function cvai_rest_search( WP_REST_Request $req ) {
 		}
 	}
 
-	cvai_log( $lang, $q, array_column( $hits, 'id' ), $interp, $ms, $tok_in, $tok_out, $hits ? 'ok' : 'no_hits' );
+	$log_interp = $interp;
+	if ( $fixes ) {
+		$log_interp['korrigerade_id'] = implode( '; ', $fixes );
+	}
+	cvai_log( $lang, $q, array_column( $hits, 'id' ), $log_interp, $ms, $tok_in, $tok_out, $hits ? 'ok' : 'no_hits' );
 
 	return new WP_REST_Response(
 		array(
@@ -663,6 +674,61 @@ function cvai_rest_search( WP_REST_Request $req ) {
 		),
 		200
 	);
+}
+
+/** Normaliserar ett resenamn för jämförelse. */
+function cvai_norm_title( $s ) {
+	$s = mb_strtolower( html_entity_decode( (string) $s, ENT_QUOTES, 'UTF-8' ) );
+	return trim( preg_replace( '/[^\p{L}\p{N}]+/u', ' ', $s ) );
+}
+
+/** Andel gemensamma ord (minst 3 tecken) mellan två namn, 0–1. */
+function cvai_title_score( $a, $b ) {
+	$a = cvai_norm_title( $a );
+	$b = cvai_norm_title( $b );
+	if ( '' === $a || '' === $b ) {
+		return 0;
+	}
+	if ( $a === $b ) {
+		return 1;
+	}
+	$words = function ( $s ) {
+		return array_unique( array_filter( explode( ' ', $s ), function ( $w ) {
+			return mb_strlen( $w ) >= 3;
+		} ) );
+	};
+	$wa = $words( $a );
+	$wb = $words( $b );
+	if ( ! $wa || ! $wb ) {
+		return ( false !== mb_strpos( $a, $b ) || false !== mb_strpos( $b, $a ) ) ? 0.9 : 0;
+	}
+	return count( array_intersect( $wa, $wb ) ) / min( count( $wa ), count( $wb ) );
+}
+
+/**
+ * Kontrollerar att id och namn från AI:n hör ihop. Stämmer de inte litar vi på
+ * namnet (motiveringen är skriven för den resan) och letar upp rätt id.
+ * Returnerar giltigt id eller '' om träffen ska tas bort.
+ */
+function cvai_resolve_hit( $cards, $id, $name ) {
+	if ( '' === trim( $name ) ) {
+		return isset( $cards[ $id ] ) ? $id : '';
+	}
+	$own = isset( $cards[ $id ] ) ? cvai_title_score( $cards[ $id ]['title'], $name ) : 0;
+	if ( $own >= 0.5 ) {
+		return $id;
+	}
+	$best = '';
+	$top  = 0;
+	foreach ( $cards as $cid => $c ) {
+		$sc = cvai_title_score( $c['title'], $name );
+		// Vid lika poäng: föredra samma typ (P = resa, E = avgång) som AI:n angav.
+		if ( $sc > $top || ( $sc === $top && $sc > 0 && $cid[0] === substr( $id, 0, 1 ) && $best[0] !== $cid[0] ) ) {
+			$top  = $sc;
+			$best = $cid;
+		}
+	}
+	return $top >= 0.6 ? $best : '';
 }
 
 function cvai_log( $lang, $q, $ids, $interp, $ms, $tin, $tout, $status ) {
