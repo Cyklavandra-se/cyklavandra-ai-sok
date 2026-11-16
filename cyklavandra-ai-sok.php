@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.4.10
+ * Version:     1.4.11
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.4.10' );
+define( 'CVAI_VERSION', '1.4.11' );
 define( 'CVAI_DB_VERSION', '2' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -40,7 +40,7 @@ require_once __DIR__ . '/includes/updater.php';
 function cvai_defaults() {
 	return array(
 		'api_key'        => '',
-		'model'          => 'claude-haiku-5-5',
+		'model'          => 'claude-sonnet-5-5',
 		'trip_tags'      => 'guidad, självguidad',
 		'include_events' => 1,
 		'rate_per_hour'  => 20,
@@ -138,6 +138,22 @@ function cvai_in_lang( $lang, $fn ) {
 
 register_activation_hook( __FILE__, 'cvai_install' );
 add_action( 'plugins_loaded', 'cvai_maybe_upgrade' );
+
+/** Engångsbyte från Haiku till Sonnet 5.5 (1.4.11). Ett annat val i inställningarna lämnas orört. */
+add_action(
+	'plugins_loaded',
+	function () {
+		if ( get_option( 'cvai_model_switch_1411' ) ) {
+			return;
+		}
+		$o = get_option( 'cvai_options', array() );
+		if ( is_array( $o ) && ( $o['model'] ?? '' ) === 'claude-haiku-5-5' ) {
+			$o['model'] = 'claude-sonnet-5-5';
+			update_option( 'cvai_options', $o );
+		}
+		update_option( 'cvai_model_switch_1411', 1, false );
+	}
+);
 
 function cvai_maybe_upgrade() {
 	if ( get_option( 'cvai_db_version' ) !== CVAI_DB_VERSION ) {
@@ -427,7 +443,7 @@ UPPGIFT:
 8. SPRÅK: Skriv sammanfattning, motiveringar och tolkning på det svarsspråk som anges i kundens meddelande. Om kunden tydligt skriver på ett annat språk, svara på kundens språk. Tilltala kunden med \"ni\"/motsvarande om de är flera, annars \"du\".
 9. Fyll i \"regler\" i verktyget INNAN du väljer resor: vilka extra regler som gäller för just den här frågan, och vilka länder de utesluter.
 
-Lämna alltid ditt svar genom verktyget visa_resor.
+Svara ALLTID genom att anropa verktyget visa_resor, exakt en gång, och skriv ingen annan text.
 
 KATALOG:
 " . $catalog_text . ( $extra ? "\n\nEXTRA REGLER FRÅN CYKLA & VANDRA – OBLIGATORISKA, de gäller före allt annat ovan:\n$extra\n\nEn resa som bryter mot en extra regel får aldrig visas, varken som träff eller alternativ." : '' );
@@ -574,9 +590,10 @@ function cvai_rest_search( WP_REST_Request $req ) {
 
 	$body = array(
 		'model'       => cvai_opt( 'model' ),
-		'max_tokens'  => 2000,
+		'max_tokens'  => 8000, // plats för tänkande + svar
 		'tools'       => array( cvai_tool_schema() ),
-		'tool_choice' => array( 'type' => 'tool', 'name' => 'visa_resor' ),
+		// Sonnet/Opus 5.5 tillåter inte tvingat verktyg; prompten kräver visa_resor.
+		'tool_choice' => array( 'type' => 'auto' ),
 		'system'      => array(
 			array(
 				'type'          => 'text',
@@ -591,6 +608,11 @@ function cvai_rest_search( WP_REST_Request $req ) {
 			),
 		),
 	);
+
+	// Låg ansträngning = snabbare svar. Stöds av generation 5-modellerna.
+	if ( preg_match( '/^claude-(opus|sonnet|haiku|fable|mythos)-5/', (string) $body['model'] ) ) {
+		$body['output_config'] = array( 'effort' => 'low' );
+	}
 
 	$resp = wp_remote_post(
 		'https://api.anthropic.com/v1/messages',
@@ -1047,7 +1069,7 @@ function cvai_admin_page() {
 						<p class="description">Säkrast är att i stället lägga <code>define( 'CVAI_API_KEY', 'sk-ant-…' );</code> i wp-config.php.</p>
 					<?php endif; ?>
 				</td></tr>
-				<tr><th>Modell</th><td><input class="regular-text" name="cvai_options[model]" value="<?php echo esc_attr( $o['model'] ); ?>"><p class="description">Standard: <code>claude-haiku-5-5</code> (snabb och billig). <code>claude-sonnet-5-5</code> ger lite bättre motiveringar men kostar mer.</p></td></tr>
+				<tr><th>Modell</th><td><input class="regular-text" name="cvai_options[model]" value="<?php echo esc_attr( $o['model'] ); ?>"><p class="description">Standard: <code>claude-sonnet-5-5</code> (följer reglerna bra, ca 0,20–1,20 kr per sökning). <code>claude-haiku-5-5</code> är billigast men följer extraregler sämre. <code>claude-opus-5-5</code> är dyrast och långsammast.</p></td></tr>
 				<tr><th>Taggar som markerar en resa</th><td><input class="regular-text" name="cvai_options[trip_tags]" value="<?php echo esc_attr( $o['trip_tags'] ); ?>"><p class="description">Kommaseparerat, på huvudspråket. Översatta taggar i WPML hittas automatiskt. Vanliga varianter (guidet, selvguidet, guided, self-guided m.fl.) känns också igen. Lägg till fler namn här om ett språk använder andra ord.</p></td></tr>
 				<tr><th>Guidade avgångar</th><td><label><input type="checkbox" name="cvai_options[include_events]" value="1" <?php checked( $o['include_events'] ); ?>> Ta med kommande evenemang från The Events Calendar</label></td></tr>
 				<tr><th>Max sökningar per besökare/timme</th><td><input type="number" min="1" name="cvai_options[rate_per_hour]" value="<?php echo (int) $o['rate_per_hour']; ?>"></td></tr>
