@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.4.8
+ * Version:     1.4.9
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.4.8' );
+define( 'CVAI_VERSION', '1.4.9' );
 define( 'CVAI_DB_VERSION', '2' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -191,7 +191,7 @@ function cvai_vocab() {
 		'self'    => array( 'självguidad', 'sjalvguidad', 'selvguidet', 'selvguidede', 'self-guided', 'selfguided', 'individuell', 'omatoiminen', 'zelfgeleid', 'en liberté', 'autoguidé' ),
 		'hike'    => array( 'vandra', 'vandring', 'vandre', 'fottur', 'hike', 'hiking', 'walking', 'wandern', 'wandelen', 'vaellus', 'randonnée' ),
 		'bike'    => array( 'cykla', 'cykel', 'sykle', 'sykkel', 'sykling', 'cykle', 'cycling', 'bike', 'radfahren', 'fietsen', 'pyöräily', 'vélo' ),
-		'country' => array( 'italien', 'italia', 'italy', 'spanien', 'spania', 'spain', 'frankrike', 'france', 'frankreich', 'portugal', 'österrike', 'østerrike', 'østrig', 'austria', 'österreich', 'tyskland', 'germany', 'deutschland', 'grekland', 'hellas', 'grækenland', 'greece', 'slovenien', 'slovenia', 'kroatien', 'kroatia', 'croatia', 'schweiz', 'sveits', 'switzerland', 'holland', 'nederland', 'belgien', 'belgia', 'danmark', 'sverige', 'norge', 'skottland', 'scotland', 'uk', 'malta', 'bulgarien', 'bulgaria', 'kanarieöarna', 'kanariøyene', 'mallorca', 'costa brava', 'garda', 'kap verde', 'costa rica', 'kuba', 'cuba', 'peru' ),
+		'country' => array( 'italien', 'italia', 'italy', 'spanien', 'spania', 'spain', 'frankrike', 'france', 'frankreich', 'portugal', 'österrike', 'østerrike', 'østrig', 'austria', 'österreich', 'tyskland', 'germany', 'deutschland', 'grekland', 'hellas', 'grækenland', 'greece', 'slovenien', 'slovenia', 'kroatien', 'kroatia', 'croatia', 'schweiz', 'sveits', 'switzerland', 'holland', 'nederland', 'belgien', 'belgia', 'danmark', 'sverige', 'norge', 'skottland', 'scotland', 'uk', 'malta', 'bulgarien', 'bulgaria', 'kanarieöarna', 'kanariøyene', 'mallorca', 'costa brava', 'garda', 'kap verde', 'costa rica', 'kuba', 'cuba', 'peru', 'ungern', 'ungarn', 'hungary', 'unkari', 'hongarije', 'hongrie', 'ecuador' ),
 	);
 }
 
@@ -219,7 +219,8 @@ function cvai_trip_tag_ids( $lang ) {
 }
 
 function cvai_catalog_key( $lang ) {
-	return 'cvai_catalog_' . $lang . '_' . (int) get_option( 'cvai_cat_ver', 1 );
+	// Pluginversionen ingår så att katalogen byggs om efter en uppdatering.
+	return 'cvai_catalog_' . $lang . '_' . (int) get_option( 'cvai_cat_ver', 1 ) . '_' . CVAI_VERSION;
 }
 
 /**

@@ -12,7 +12,7 @@ här sökningen ska bli grunden till en ny förstasida.
   - **Katalog** (`cvai_get_catalog`, `cvai_build_catalog`): publicerade sidor med taggen
     `guidad`/`självguidad` (+ varianter på andra språk) och kommande evenemang från
     The Events Calendar. En katalog per WPML-språk, cachad i transient
-    `cvai_catalog_{lang}_{ver}`; `cvai_flush_catalog()` bumpar `cvai_cat_ver`.
+    `cvai_catalog_{lang}_{ver}_{CVAI_VERSION}`; `cvai_flush_catalog()` bumpar `cvai_cat_ver`.
   - **Svårighet** från taggar `hike1–4` / `bike1–4` (även WPML-slugs som `hike2-2`).
   - **REST** `POST /wp-json/cvai/v1/search` `{q, lang}` → Anthropic Messages API med
     `tool_choice` på verktyget `visa_resor` (strukturerat svar). Katalogen ligger i
