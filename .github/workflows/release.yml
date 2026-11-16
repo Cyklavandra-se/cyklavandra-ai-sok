@@ -1,24 +1,33 @@
 name: Bygg release
 
-# Körs när du publicerar en release på GitHub (Releases → Draft a new release).
+# Två sätt att släppa en version:
+#  1. Pusha en tagg vX.Y.Z  → releasen skapas automatiskt med zip och text från README.
+#  2. Releases → Draft a new release → Publish  → zip bifogas till din release.
 on:
+  push:
+    tags: ['v*']
   release:
     types: [published]
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.event.release.tag_name || github.ref_name }}
+
 jobs:
   zip:
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ env.TAG }}
 
       - name: Kontrollera att taggen stämmer med versionen
         run: |
-          TAG="${{ github.event.release.tag_name }}"
           VER=$(grep -m1 -E '^\s*\*\s*Version:' cyklavandra-ai-sok.php | sed -E 's/.*Version:\s*//' | tr -d '[:space:]')
           CONST=$(grep -m1 "define( 'CVAI_VERSION'" cyklavandra-ai-sok.php | sed -E "s/.*'CVAI_VERSION', '([^']+)'.*/\1/")
           echo "Tagg: $TAG  Version: $VER  CVAI_VERSION: $CONST"
@@ -30,10 +39,21 @@ jobs:
       - name: Bygg zip
         run: |
           mkdir -p build/cyklavandra-ai-sok
-          rsync -a --exclude '.git*' --exclude '.github' --exclude 'build' --exclude 'README.md' ./ build/cyklavandra-ai-sok/
+          rsync -a --exclude '.git*' --exclude '.github' --exclude 'build' --exclude 'README.md' --exclude 'CLAUDE.md' ./ build/cyklavandra-ai-sok/
           cd build && zip -r ../cyklavandra-ai-sok.zip cyklavandra-ai-sok
 
+      - name: Skapa releasen om den saknas (vid taggpush)
+        if: github.event_name == 'push'
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Releasen $TAG finns redan."
+            exit 0
+          fi
+          # Releasetext = raden för versionen under "Versioner" i README.md.
+          NOTES=$(grep -m1 -F -- "- **${TAG#v}** – " README.md | sed -E 's/^- \*\*[^*]+\*\* – //')
+          [ -n "$NOTES" ] || NOTES="Version ${TAG#v}"
+          gh release create "$TAG" --verify-tag --title "${TAG#v}" --notes "$NOTES" \
+            || gh release view "$TAG" >/dev/null
+
       - name: Bifoga zip till releasen
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" cyklavandra-ai-sok.zip --clobber
+        run: gh release upload "$TAG" cyklavandra-ai-sok.zip --clobber
