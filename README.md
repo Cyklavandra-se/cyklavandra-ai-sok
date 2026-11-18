@@ -50,6 +50,7 @@ vanliga uppdateringar under **Tillägg** och **Kontrollpanel → Uppdateringar**
 |---|---|
 | `cyklavandra-ai-sok.php` | Katalog, prompt, REST-endpoint (`/wp-json/cvai/v1/search`), shortcode, admin |
 | `includes/i18n.php` | Texter per språk |
+| `cyklavandra-meny.php` | Gemensam meny Cykla&Vandra – kopieras oförändrad från `bokningsformular` |
 | `includes/updater.php` | Uppdateringar från GitHub-releaser |
 | `assets/cvai.js` / `cvai.css` | Sökrutan och resultatkorten |
 | `wpml-config.xml` | Gör exempelfrågor och shortcode-attribut översättningsbara |
@@ -69,6 +70,7 @@ vanliga uppdateringar under **Tillägg** och **Kontrollpanel → Uppdateringar**
 
 ## Versioner
 
+- **1.5.0** – AI-sök flyttar till den gemensamma menyn **Cykla&Vandra → AI-sök** (samma som Bokningsformulär), med ett kort på översiktssidan. Den gamla adressen under Inställningar skickas vidare.
 - **1.4.12** – Borttagen regel om att grupper på 4+ kan välja startdatum fritt på resor på egen hand (stämmer inte: de kan bokas från 1 person och vissa har fast avresedag). AI:n får inte lova valfritt startdatum som inte står i katalogen.
 - **1.4.11** – Byte till Claude Sonnet 5.5 (följer extrareglerna bättre). Sajter som hade Haiku byts automatiskt en gång; ett eget val lämnas orört. Låg ansträngning för snabbare svar.
 - **1.4.10** – Extrareglerna följs bättre: de ligger efter katalogen som obligatoriska, AI:n måste ange vilka regler som gäller innan den väljer, och resor i länder som reglerna utesluter tas bort av servern. Tillämpade regler syns i sökhistoriken.

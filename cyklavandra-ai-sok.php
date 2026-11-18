@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.4.12
+ * Version:     1.5.0
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,12 +25,13 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.4.12' );
+define( 'CVAI_VERSION', '1.5.0' );
 define( 'CVAI_DB_VERSION', '2' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
 
 require_once __DIR__ . '/includes/i18n.php';
+require_once __DIR__ . '/cyklavandra-meny.php';
 require_once __DIR__ . '/includes/updater.php';
 
 /* -------------------------------------------------------------------------
@@ -932,14 +933,46 @@ function cvai_style_vars() {
 }
 
 /* -------------------------------------------------------------------------
- * Admin: Inställningar → AI-sök
+ * Admin: Cykla&Vandra → AI-sök (gemensam meny från cyklavandra-meny.php)
  * ---------------------------------------------------------------------- */
 
 add_action(
 	'admin_menu',
 	function () {
-		add_options_page( 'AI-sök', 'AI-sök', 'manage_options', 'cvai', 'cvai_admin_page' );
+		add_submenu_page( Cyklavandra_Meny::SLUG, 'AI-sök', 'AI-sök', 'manage_options', 'cvai', 'cvai_admin_page' );
 	}
+);
+
+// Kortet på översiktssidan Cykla&Vandra.
+add_filter(
+	'cyklavandra_verktyg',
+	function ( $verktyg ) {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return $verktyg;
+		}
+		$verktyg[] = array(
+			'titel'       => 'AI-sök',
+			'beskrivning' => 'Fritextsökning med AI bland resorna: inställningar, extraregler, sökhistorik och resekatalog.',
+			'url'         => admin_url( 'admin.php?page=cvai' ),
+			'version'     => CVAI_VERSION,
+			'ikon'        => plugins_url( 'assets/icon.svg', CVAI_FILE ),
+		);
+		return $verktyg;
+	}
+);
+
+// Gamla adressen (Inställningar → AI-sök) skickas vidare till den nya. Måste ske i admin_menu:
+// WordPress stoppar okända sidor med "ingen behörighet" innan admin_init körs.
+add_action(
+	'admin_menu',
+	function () {
+		global $pagenow;
+		if ( 'options-general.php' === $pagenow && isset( $_GET['page'] ) && 'cvai' === $_GET['page'] ) { // phpcs:ignore WordPress.Security.NonceVerification
+			wp_safe_redirect( admin_url( 'admin.php?page=cvai' ) );
+			exit;
+		}
+	},
+	999
 );
 
 add_action(
@@ -1031,6 +1064,7 @@ function cvai_admin_page() {
 	?>
 	<div class="wrap">
 		<h1>AI-sök</h1>
+		<?php settings_errors(); // "Inställningarna sparades" visas inte automatiskt utanför menyn Inställningar. ?>
 		<p>Lägg shortcoden <code>[cv_ai_sok]</code> på startsidan i varje språk (t.ex. i ett Avada Text Block). Rubrik och ingress skriver du själv ovanför. Sökrutan, knappar och resultat visas automatiskt på sidans språk.</p>
 		<p>Valfria attribut: <code>platshallare="…"</code>, <code>knapp="…"</code>, <code>exempel="nej"</code>, <code>exempelfragor="Fråga 1|Fråga 2|Fråga 3"</code> (egna exempel för just den sidan – praktiskt per språk).</p>
 
@@ -1154,7 +1188,7 @@ function cvai_admin_page() {
 add_filter(
 	'plugin_action_links_' . plugin_basename( __FILE__ ),
 	function ( $links ) {
-		array_unshift( $links, '<a href="' . esc_url( admin_url( 'options-general.php?page=cvai' ) ) . '">Inställningar</a>' );
+		array_unshift( $links, '<a href="' . esc_url( admin_url( 'admin.php?page=cvai' ) ) . '">Inställningar</a>' );
 		return $links;
 	}
 );
