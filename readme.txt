@@ -9,8 +9,8 @@ och får 2–4 matchande resor med motivering.
 2. Skaffa en API-nyckel på https://console.anthropic.com (Settings → API Keys).
 3. Lägg nyckeln i wp-config.php (säkrast), ovanför raden "That's all, stop editing":
       define( 'CVAI_API_KEY', 'sk-ant-...' );
-   eller klistra in den under Inställningar → AI-sök.
-4. Gå till Inställningar → AI-sök och kontrollera att antalet resor i katalogen stämmer.
+   eller klistra in den under Cykla&Vandra → AI-sök.
+4. Gå till Cykla&Vandra → AI-sök och kontrollera att antalet resor i katalogen stämmer.
    Titta i "Förhandsgranska katalogen" att nivå och månader kommer med.
 5. Lägg shortcoden [cv_ai_sok] på startsidan, t.ex. i ett Avada Text Block.
 
@@ -41,4 +41,4 @@ Rubrik och ingress skrivs fritt i Avada ovanför shortcoden.
 * Katalogen cachas i 24 timmar och byggs om automatiskt när en sida eller tagg sparas.
 * Sökningen går via WordPress-servern till Claude – API-nyckeln syns aldrig för besökaren.
 * Spärrar: max sökningar per besökare och timme samt max per dygn (kostnadstak).
-* Sökhistorik sparas utan IP-adress och visas under Inställningar → AI-sök.
+* Sökhistorik sparas utan IP-adress och visas under Cykla&Vandra → AI-sök.

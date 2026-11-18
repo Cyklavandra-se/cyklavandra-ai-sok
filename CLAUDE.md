@@ -20,8 +20,12 @@ här sökningen ska bli grunden till en ny förstasida.
   - Skydd: same-origin-kontroll, rate limit per IP/timme, dygnstak.
   - **Shortcode** `[cv_ai_sok]` (attribut: `platshallare`, `knapp`, `exempel="nej"`,
     `exempelfragor="a|b"`). Pär skriver rubrik/ingress själv i Avada – lägg aldrig till det i pluginen.
-  - **Admin**: Inställningar → AI-sök (API-nyckel, modell, taggar, antal träffar, färger,
+  - **Admin**: Cykla&Vandra → AI-sök (API-nyckel, modell, taggar, antal träffar, färger,
     exempelfrågor per språk, sökhistorik, katalogförhandsvisning per språk).
+- `cyklavandra-meny.php` – gemensam adminmeny Cykla&Vandra (klass `Cyklavandra_Meny`), kopierad
+  **oförändrad** från repot `Cyklavandra-se/bokningsformular`. Ändra den aldrig här; ändras den där,
+  kopiera in den nya versionen. AI-sök är undersidan `admin.php?page=cvai` + ett kort via
+  filtret `cyklavandra_verktyg`.
 - `includes/i18n.php` – alla UI-texter + inbyggda exempelfrågor för sv, nb, da, en, de, fi, nl, fr.
   WPML-koden `no` mappas till `nb`.
 - `includes/updater.php` – uppdateringar från GitHub-releaser via `Update URI` +
