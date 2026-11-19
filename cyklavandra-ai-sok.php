@@ -969,6 +969,19 @@ function cvai_log( $lang, $q, $ids, $interp, $ms, $tin, $tout, $status ) {
  * Shortcode
  * ---------------------------------------------------------------------- */
 
+// Kartan [resekarta] (ett annat tillägg) döljs automatiskt när kunden söker: lägg den i cvai-dolj.
+add_filter(
+	'do_shortcode_tag',
+	function ( $output, $tag ) {
+		if ( 'resekarta' === $tag && is_string( $output ) && '' !== $output ) {
+			return '<div class="cvai-dolj">' . $output . '</div>';
+		}
+		return $output;
+	},
+	10,
+	2
+);
+
 add_shortcode( 'cv_ai_sok', 'cvai_shortcode' );
 function cvai_shortcode( $atts ) {
 	$lang = cvai_current_lang();

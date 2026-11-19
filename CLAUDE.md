@@ -23,8 +23,8 @@ här sökningen ska bli grunden till en ny förstasida.
     systemprompten med `cache_control`.
   - Skydd: same-origin-kontroll, rate limit per IP/timme, dygnstak.
   - **Shortcode** `[cv_ai_sok]` (attribut: `platshallare`, `knapp`, `exempel="nej"`,
-    `exempelfragor="a|b"`, `dolj="väljare"`). Element med klassen `cvai-dolj` (t.ex. kartan)
-    döljs när kunden söker. Pär skriver rubrik/ingress själv i Avada – lägg aldrig till det i pluginen.
+    `exempelfragor="a|b"`, `dolj="väljare"`). Element med klassen `cvai-dolj` döljs när kunden söker;
+    utdata från kortkoden `[resekarta]` får klassen automatiskt (filtret `do_shortcode_tag`). Pär skriver rubrik/ingress själv i Avada – lägg aldrig till det i pluginen.
   - **Admin**: Cykla&Vandra → AI-sök (API-nyckel, modell, taggar, antal träffar, färger,
     exempelfrågor per språk, sökhistorik, katalogförhandsvisning per språk).
 - `cyklavandra-meny.php` – gemensam adminmeny Cykla&Vandra (klass `Cyklavandra_Meny`), kopierad

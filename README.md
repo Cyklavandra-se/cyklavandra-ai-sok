@@ -71,7 +71,7 @@ vanliga uppdateringar under **Tillägg** och **Kontrollpanel → Uppdateringar**
 
 ## Versioner
 
-- **1.6.2** – Dölj kartan (eller annat) när kunden söker: ge elementet CSS-klassen `cvai-dolj` i Avada, eller ange en väljare med shortcode-attributet `dolj`. Visas igen om sökningen misslyckas.
+- **1.6.2** – Kartan (`[resekarta]`) döljs automatiskt när kunden söker och visas igen om sökningen misslyckas. Annat kan döljas med CSS-klassen `cvai-dolj` i Avada eller shortcode-attributet `dolj`.
 - **1.6.1** – Destinationskortet har samma storlek och layout som resekorten, med en kort text från sidan. Rubrikerna "Bäst för er", "Kan också passa" och "Läs mer om destinationen" är H2 med temats rubrikstil.
 - **1.6.0** – Destinationssidor i sökningen: undersidorna till Destinationer läses in, och när kunden nämner ett land eller en region visas den mest specifika destinationssidan längst ner ("Läs mer om destinationen"). Kan stängas av och sökvägen ändras i inställningarna.
 - **1.5.0** – AI-sök flyttar till den gemensamma menyn **Cykla&Vandra → AI-sök** (samma som Bokningsformulär), med ett kort på översiktssidan. Den gamla adressen under Inställningar skickas vidare.
