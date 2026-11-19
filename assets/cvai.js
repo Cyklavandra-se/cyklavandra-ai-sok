@@ -74,6 +74,28 @@
 		var chips = root.querySelector('.cvai-chips');
 		var busy = false;
 
+		// Allt med klassen cvai-dolj (t.ex. kartan, satt som CSS-klass i Avada) och det som
+		// shortcodens attribut dolj pekar ut döljs när kunden söker, och visas igen vid fel.
+		var hideSel = '.cvai-dolj' + (root.getAttribute('data-cvai-hide') ? ', ' + root.getAttribute('data-cvai-hide') : '');
+		function toggleExtras(hide) {
+			var els;
+			try { els = document.querySelectorAll(hideSel); } catch (e) { els = document.querySelectorAll('.cvai-dolj'); }
+			Array.prototype.forEach.call(els, function (el) {
+				if (root.contains(el)) return;
+				if (hide) {
+					if (!el.hasAttribute('data-cvai-hidden')) {
+						el.setAttribute('data-cvai-hidden', el.style.getPropertyValue('display') + '|' + el.style.getPropertyPriority('display'));
+					}
+					el.style.setProperty('display', 'none', 'important'); // Avada sätter ibland display med !important
+				} else if (el.hasAttribute('data-cvai-hidden')) {
+					var prev = el.getAttribute('data-cvai-hidden').split('|');
+					el.style.removeProperty('display');
+					if (prev[0]) el.style.setProperty('display', prev[0], prev[1] || '');
+					el.removeAttribute('data-cvai-hidden');
+				}
+			});
+		}
+
 		(data.examples || []).forEach(function (e) {
 			var b = document.createElement('button');
 			b.type = 'button';
@@ -97,6 +119,7 @@
 			btn.disabled = true;
 			root.querySelector('.cvai-out').innerHTML = '';
 			if (chips) chips.hidden = true;
+			toggleExtras(true);
 			status.innerHTML = '<div class="cvai-loading">' +
 				'<span class="cvai-spin" aria-hidden="true"></span>' +
 				'<span class="cvai-loading-txt">' + esc(t('loading', 'Letar bland våra resor')) + '</span>' +
@@ -119,6 +142,7 @@
 				})
 				.catch(function (e) {
 					if (chips) chips.hidden = false;
+					toggleExtras(false);
 					status.innerHTML = '<span class="cvai-err">' + esc(e.message || t('err_generic', 'Något gick fel. Försök igen.')) + '</span>';
 				})
 				.then(function () { busy = false; btn.disabled = false; });

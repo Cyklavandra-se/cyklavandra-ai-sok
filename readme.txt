@@ -16,7 +16,9 @@ och får 2–4 matchande resor med motivering.
 
 == Shortcode-attribut ==
 
-[cv_ai_sok platshallare="..." knapp="Sök" exempel="nej" exempelfragor="Fråga 1|Fråga 2"]
+[cv_ai_sok platshallare="..." knapp="Sök" exempel="nej" exempelfragor="Fråga 1|Fråga 2" dolj="#karta"]
+
+Allt med CSS-klassen cvai-dolj (t.ex. kartan) döljs när kunden söker.
 
 Rubrik och ingress skrivs fritt i Avada ovanför shortcoden.
 

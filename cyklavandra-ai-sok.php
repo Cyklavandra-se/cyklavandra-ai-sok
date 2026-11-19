@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.6.1
+ * Version:     1.6.2
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.6.1' );
+define( 'CVAI_VERSION', '1.6.2' );
 define( 'CVAI_DB_VERSION', '2' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -969,6 +969,19 @@ function cvai_log( $lang, $q, $ids, $interp, $ms, $tin, $tout, $status ) {
  * Shortcode
  * ---------------------------------------------------------------------- */
 
+// Kartan [resekarta] (ett annat tillägg) döljs automatiskt när kunden söker: lägg den i cvai-dolj.
+add_filter(
+	'do_shortcode_tag',
+	function ( $output, $tag ) {
+		if ( 'resekarta' === $tag && is_string( $output ) && '' !== $output ) {
+			return '<div class="cvai-dolj">' . $output . '</div>';
+		}
+		return $output;
+	},
+	10,
+	2
+);
+
 add_shortcode( 'cv_ai_sok', 'cvai_shortcode' );
 function cvai_shortcode( $atts ) {
 	$lang = cvai_current_lang();
@@ -978,6 +991,7 @@ function cvai_shortcode( $atts ) {
 			'knapp'         => '',
 			'exempel'       => 'ja',
 			'exempelfragor' => '', // egna exempel för just den här sidan, separerade med |
+			'dolj'          => '', // CSS-väljare för mer som ska döljas vid sökning (utöver klassen cvai-dolj)
 		),
 		$atts,
 		'cv_ai_sok'
@@ -1012,7 +1026,7 @@ function cvai_shortcode( $atts ) {
 
 	ob_start();
 	?>
-	<div class="cvai" data-cvai lang="<?php echo esc_attr( $lang ); ?>" style="<?php echo esc_attr( cvai_style_vars() ); ?>">
+	<div class="cvai" data-cvai data-cvai-hide="<?php echo esc_attr( trim( (string) $atts['dolj'] ) ); ?>" lang="<?php echo esc_attr( $lang ); ?>" style="<?php echo esc_attr( cvai_style_vars() ); ?>">
 		<form class="cvai-form" novalidate>
 			<label class="screen-reader-text" for="cvai-q"><?php echo esc_html( cvai_t( 'label', $lang ) ); ?></label>
 			<textarea id="cvai-q" class="cvai-q" rows="3" maxlength="600" placeholder="<?php echo esc_attr( $placeholder ); ?>"></textarea>
