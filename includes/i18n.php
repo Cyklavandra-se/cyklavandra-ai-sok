@@ -70,6 +70,8 @@ function cvai_all_strings() {
 			'also'             => 'Kan också passa',
 			'why'              => 'Därför passar den:',
 			'more'             => 'Läs mer och boka →',
+			'dests'            => 'Läs mer om destinationen',
+			'dest_more'        => 'Till destinationssidan →',
 			'none'             => 'Vi hittade ingen resa som passar riktigt. Kontakta oss gärna så hjälper vi er!',
 			'err_short'        => 'Beskriv gärna lite mer vad ni söker.',
 			'err_forbidden'    => 'Otillåten förfrågan.',
@@ -108,6 +110,8 @@ function cvai_all_strings() {
 			'also'             => 'Kan også passe',
 			'why'              => 'Derfor passer den:',
 			'more'             => 'Les mer og bestill →',
+			'dests'            => 'Les mer om destinasjonen',
+			'dest_more'        => 'Til destinasjonssiden →',
 			'none'             => 'Vi fant ingen reise som passer helt. Ta gjerne kontakt, så hjelper vi dere!',
 			'err_short'        => 'Beskriv gjerne litt mer hva dere ser etter.',
 			'err_forbidden'    => 'Ugyldig forespørsel.',
@@ -146,6 +150,8 @@ function cvai_all_strings() {
 			'also'             => 'Kan også passe',
 			'why'              => 'Derfor passer den:',
 			'more'             => 'Læs mere og book →',
+			'dests'            => 'Læs mere om destinationen',
+			'dest_more'        => 'Til destinationssiden →',
 			'none'             => 'Vi fandt ingen rejse, der passer helt. Kontakt os gerne, så hjælper vi jer!',
 			'err_short'        => 'Beskriv gerne lidt mere, hvad I søger.',
 			'err_forbidden'    => 'Ugyldig forespørgsel.',
@@ -184,6 +190,8 @@ function cvai_all_strings() {
 			'also'             => 'Could also suit you',
 			'why'              => 'Why it suits you:',
 			'more'             => 'Read more and book →',
+			'dests'            => 'Read more about the destination',
+			'dest_more'        => 'Go to the destination page →',
 			'none'             => 'We could not find a trip that fits well. Please contact us and we will help!',
 			'err_short'        => 'Please describe a little more what you are looking for.',
 			'err_forbidden'    => 'Request not allowed.',
@@ -222,6 +230,8 @@ function cvai_all_strings() {
 			'also'             => 'Könnte auch passen',
 			'why'              => 'Darum passt sie:',
 			'more'             => 'Mehr lesen und buchen →',
+			'dests'            => 'Mehr über das Reiseziel',
+			'dest_more'        => 'Zur Seite des Reiseziels →',
 			'none'             => 'Wir haben keine passende Reise gefunden. Kontaktieren Sie uns gern, wir helfen Ihnen!',
 			'err_short'        => 'Bitte beschreiben Sie etwas genauer, was Sie suchen.',
 			'err_forbidden'    => 'Unzulässige Anfrage.',
@@ -260,6 +270,8 @@ function cvai_all_strings() {
 			'also'             => 'Voisi myös sopia',
 			'why'              => 'Miksi se sopii:',
 			'more'             => 'Lue lisää ja varaa →',
+			'dests'            => 'Lue lisää kohteesta',
+			'dest_more'        => 'Kohdesivulle →',
 			'none'             => 'Emme löytäneet täysin sopivaa matkaa. Ota yhteyttä, niin autamme!',
 			'err_short'        => 'Kerro vähän tarkemmin, mitä etsitte.',
 			'err_forbidden'    => 'Pyyntö ei ole sallittu.',
@@ -298,6 +310,8 @@ function cvai_all_strings() {
 			'also'             => 'Past misschien ook',
 			'why'              => 'Daarom past deze:',
 			'more'             => 'Lees meer en boek →',
+			'dests'            => 'Meer over de bestemming',
+			'dest_more'        => 'Naar de bestemmingspagina →',
 			'none'             => 'We vonden geen reis die echt past. Neem gerust contact op, dan helpen we jullie!',
 			'err_short'        => 'Beschrijf iets uitgebreider wat jullie zoeken.',
 			'err_forbidden'    => 'Verzoek niet toegestaan.',
@@ -336,6 +350,8 @@ function cvai_all_strings() {
 			'also'             => 'Pourrait aussi vous plaire',
 			'why'              => 'Pourquoi il vous convient :',
 			'more'             => 'En savoir plus et réserver →',
+			'dests'            => 'En savoir plus sur la destination',
+			'dest_more'        => 'Voir la page de la destination →',
 			'none'             => 'Nous n’avons pas trouvé de voyage vraiment adapté. Contactez-nous, nous vous aiderons !',
 			'err_short'        => 'Décrivez un peu plus ce que vous recherchez.',
 			'err_forbidden'    => 'Requête non autorisée.',
@@ -388,7 +404,7 @@ function cvai_level_label( $type, $n, $lang ) {
 }
 
 function cvai_js_strings( $lang ) {
-	$keys = array( 'loading', 'interp_title', 'best', 'also', 'why', 'more', 'none', 'err_short', 'err_generic', 'lbl_land', 'lbl_manad', 'lbl_aktivitet', 'lbl_niva', 'lbl_antal', 'lbl_ovrigt' );
+	$keys = array( 'loading', 'interp_title', 'best', 'also', 'why', 'more', 'none', 'err_short', 'err_generic', 'lbl_land', 'lbl_manad', 'lbl_aktivitet', 'lbl_niva', 'lbl_antal', 'lbl_ovrigt', 'dests', 'dest_more' );
 	$out  = array();
 	foreach ( $keys as $k ) {
 		$out[ $k ] = cvai_t( $k, $lang );

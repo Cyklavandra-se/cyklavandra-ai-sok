@@ -13,6 +13,10 @@ här sökningen ska bli grunden till en ny förstasida.
     `guidad`/`självguidad` (+ varianter på andra språk) och kommande evenemang från
     The Events Calendar. En katalog per WPML-språk, cachad i transient
     `cvai_catalog_{lang}_{ver}_{CVAI_VERSION}`; `cvai_flush_catalog()` bumpar `cvai_cat_ver`.
+  - **Destinationssidor** (`cvai_destination_pages`): undersidor i alla nivåer till sidan i
+    inställningen `dest_parent` (standard `information/hitta-resa/destinationer`), id `D…`, i
+    katalogens `dests`. AI:n lägger dem i fältet `destinationer` (max 2, mest specifika platsen);
+    visas längst ner under "Läs mer om destinationen".
   - **Svårighet** från taggar `hike1–4` / `bike1–4` (även WPML-slugs som `hike2-2`).
   - **REST** `POST /wp-json/cvai/v1/search` `{q, lang}` → Anthropic Messages API med
     `tool_choice` på verktyget `visa_resor` (strukturerat svar). Katalogen ligger i
