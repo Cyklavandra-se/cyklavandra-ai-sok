@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.6.0
+ * Version:     1.6.1
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.6.0' );
+define( 'CVAI_VERSION', '1.6.1' );
 define( 'CVAI_DB_VERSION', '2' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -411,8 +411,9 @@ function cvai_build_catalog( $lang ) {
 				'img'   => get_the_post_thumbnail_url( $d['post'], 'medium_large' ) ?: '',
 				'land'  => array_values( array_unique( $land ) ),
 			);
-			$raw          = has_excerpt( $d['post'] ) ? $d['post']->post_excerpt . ' ' . $d['post']->post_content : $d['post']->post_content;
-			$dest_lines[] = sprintf( '%s | %s | %s | %s', $key, $title, $d['parent'] ? $d['parent'] : '-', cvai_clean_text( $raw, 300 ) );
+			$raw                   = has_excerpt( $d['post'] ) ? $d['post']->post_excerpt . ' ' . $d['post']->post_content : $d['post']->post_content;
+			$dests[ $key ]['text'] = cvai_clean_text( $raw, 170 );
+			$dest_lines[]          = sprintf( '%s | %s | %s | %s', $key, $title, $d['parent'] ? $d['parent'] : '-', cvai_clean_text( $raw, 300 ) );
 		}
 	}
 
@@ -823,6 +824,7 @@ function cvai_rest_search( WP_REST_Request $req ) {
 			'title' => $dest_cards[ $id ]['title'],
 			'url'   => $dest_cards[ $id ]['url'],
 			'img'   => cvai_opt( 'show_images' ) ? $dest_cards[ $id ]['img'] : '',
+			'text'  => (string) ( $dest_cards[ $id ]['text'] ?? '' ),
 		);
 	}
 	$dests = array_values( $dests );

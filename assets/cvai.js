@@ -28,11 +28,15 @@
 			'</div></article>';
 	}
 
+	// Samma kortlayout som resorna, med en kort text från destinationssidan.
 	function destCard(h) {
-		return '<a class="cvai-dest" href="' + esc(h.url) + '">' +
-			(h.img ? '<img src="' + esc(h.img) + '" alt="" loading="lazy">' : '') +
-			'<span class="cvai-dest-body"><strong class="cvai-dest-h">' + esc(h.title) + '</strong>' +
-			'<span class="cvai-dest-more">' + esc(t('dest_more', 'Till destinationssidan →')) + '</span></span></a>';
+		return '<article class="cvai-card cvai-destcard">' +
+			(h.img ? '<a class="cvai-img" href="' + esc(h.url) + '"><img src="' + esc(h.img) + '" alt="" loading="lazy"></a>' : '') +
+			'<div class="cvai-body">' +
+			'<h3 class="cvai-h"><a href="' + esc(h.url) + '">' + esc(h.title) + '</a></h3>' +
+			(h.text ? '<p class="cvai-why">' + esc(h.text) + '</p>' : '') +
+			'<a class="cvai-more" href="' + esc(h.url) + '">' + esc(t('dest_more', 'Till destinationssidan →')) + '</a>' +
+			'</div></article>';
 	}
 
 	function render(root, d) {
@@ -45,15 +49,15 @@
 		if (tags) html += '<div class="cvai-interp"><span>' + esc(t('interp_title', 'Så tolkade vi er fråga')) + '</span>' + tags + '</div>';
 		if (d.summary) html += '<p class="cvai-summary">' + esc(d.summary) + '</p>';
 		if (d.hits && d.hits.length) {
-			html += '<h4 class="cvai-sub">' + esc(t('best', 'Bäst för er')) + '</h4><div class="cvai-grid">' +
+			html += '<h2 class="cvai-sub">' + esc(t('best', 'Bäst för er')) + '</h2><div class="cvai-grid">' +
 				d.hits.map(function (h, i) { return card(h, i === 0); }).join('') + '</div>';
 		}
 		if (d.alternatives && d.alternatives.length) {
-			html += '<h4 class="cvai-sub">' + esc(t('also', 'Kan också passa')) + '</h4><div class="cvai-grid">' +
+			html += '<h2 class="cvai-sub">' + esc(t('also', 'Kan också passa')) + '</h2><div class="cvai-grid">' +
 				d.alternatives.map(function (h) { return card(h, false); }).join('') + '</div>';
 		}
 		if (d.destinations && d.destinations.length) {
-			html += '<h4 class="cvai-sub">' + esc(t('dests', 'Läs mer om destinationen')) + '</h4><div class="cvai-dests">' +
+			html += '<h2 class="cvai-sub">' + esc(t('dests', 'Läs mer om destinationen')) + '</h2><div class="cvai-grid">' +
 				d.destinations.map(destCard).join('') + '</div>';
 		}
 		if (!(d.hits && d.hits.length) && !(d.alternatives && d.alternatives.length)) {
