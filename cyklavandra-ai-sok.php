@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.6.2
+ * Version:     1.7.0
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.6.2' );
+define( 'CVAI_VERSION', '1.7.0' );
 define( 'CVAI_DB_VERSION', '2' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -51,6 +51,7 @@ function cvai_defaults() {
 		'examples'       => "Vi är 6 personer som vill vandra i Italien i oktober. Vi är ganska duktiga vandrare och har gått i Österrike många somrar.\nTvå pensionärer som vill cykla lugnt i maj, gärna med vin och god mat.\nJag vill på en guidad vandringsresa i höst och slippa planera själv.\nFamilj med två tonåringar som vill vandra i bergen i juli.",
 		'extra_rules'    => '',
 		'log_enabled'    => 1,
+		'log_months'     => 12,
 		'examples_by_lang' => array(),
 		'max_hits'       => 4,
 		'max_alts'       => 2,
@@ -609,6 +610,20 @@ add_action(
 	function () {
 		register_rest_route(
 			'cvai/v1',
+			'/historik',
+			array(
+				'methods'             => 'GET',
+				'callback'            => 'cvai_rest_history',
+				'permission_callback' => 'cvai_export_allowed',
+				'args'                => array(
+					'fran'   => array( 'type' => 'string' ),
+					'till'   => array( 'type' => 'string' ),
+					'format' => array( 'type' => 'string' ),
+				),
+			)
+		);
+		register_rest_route(
+			'cvai/v1',
 			'/search',
 			array(
 				'methods'             => 'POST',
@@ -944,6 +959,152 @@ function cvai_country_variants( $c ) {
 	return array( $c );
 }
 
+/* -------------------------------------------------------------------------
+ * Export av sökhistoriken (för analys, t.ex. en schemalagd uppgift)
+ * ---------------------------------------------------------------------- */
+
+/** Hemlig nyckel för exporten. Skapas första gången, kan bytas i admin. */
+function cvai_export_key( $renew = false ) {
+	$key = (string) get_option( 'cvai_export_key', '' );
+	if ( $renew || strlen( $key ) < 32 ) {
+		$key = wp_generate_password( 40, false, false );
+		update_option( 'cvai_export_key', $key, false );
+	}
+	return $key;
+}
+
+/** Nyckeln skickas som "Authorization: Bearer <nyckel>" eller "X-Cvai-Key: <nyckel>". */
+function cvai_export_allowed( WP_REST_Request $req ) {
+	$given = (string) $req->get_header( 'x_cvai_key' );
+	if ( '' === $given ) {
+		$auth = (string) $req->get_header( 'authorization' );
+		if ( '' === $auth && isset( $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ) ) {
+			$auth = sanitize_text_field( wp_unslash( $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ) );
+		}
+		if ( preg_match( '/^Bearer\s+(\S+)$/i', trim( $auth ), $m ) ) {
+			$given = $m[1];
+		}
+	}
+	$key = (string) get_option( 'cvai_export_key', '' );
+	if ( strlen( $key ) < 32 || '' === $given || ! hash_equals( $key, $given ) ) {
+		return new WP_Error( 'cvai_forbidden', 'Fel eller saknad nyckel.', array( 'status' => 401 ) );
+	}
+	return true;
+}
+
+/** Maskerar e-postadresser och telefonnummer i kundens text. */
+function cvai_mask_personal( $text ) {
+	$text = preg_replace( '/[\p{L}\p{N}._%+\-]+@[\p{L}\p{N}.\-]+\.[\p{L}]{2,}/u', '[e-post]', (string) $text );
+	return preg_replace( '/(?<![\p{L}\p{N}])\+?\d[\d\s\-()]{6,}\d(?![\p{L}\p{N}])/u', '[telefon]', $text );
+}
+
+function cvai_rest_history( WP_REST_Request $req ) {
+	global $wpdb;
+	$tz   = wp_timezone();
+	$from = (string) $req->get_param( 'fran' );
+	$to   = (string) $req->get_param( 'till' );
+	$from = preg_match( '/^\d{4}-\d{2}-\d{2}$/', $from ) ? $from . ' 00:00:00' : wp_date( 'Y-m-d 00:00:00', time() - 7 * DAY_IN_SECONDS, $tz );
+	$to   = preg_match( '/^\d{4}-\d{2}-\d{2}$/', $to ) ? $to . ' 23:59:59' : current_time( 'mysql' );
+
+	$rows = $wpdb->get_results(
+		$wpdb->prepare(
+			"SELECT * FROM {$wpdb->prefix}cvai_log WHERE created BETWEEN %s AND %s ORDER BY created ASC LIMIT 5000",
+			$from,
+			$to
+		),
+		ARRAY_A
+	);
+
+	// Resornas namn i stället för bara id, per språk ur katalogen.
+	$titles = array();
+	$out    = array();
+	foreach ( (array) $rows as $row ) {
+		$lang = $row['lang'] ? $row['lang'] : cvai_default_lang();
+		if ( ! isset( $titles[ $lang ] ) ) {
+			$cat             = cvai_get_catalog( $lang );
+			$titles[ $lang ] = array_map(
+				function ( $c ) {
+					return $c['title'];
+				},
+				array_merge( (array) $cat['cards'], (array) ( $cat['dests'] ?? array() ) )
+			);
+		}
+		$ids    = array_values( array_filter( explode( ',', (string) $row['hits'] ) ) );
+		$interp = json_decode( (string) $row['interpretation'], true );
+		$out[]  = array(
+			'tid'       => $row['created'],
+			'sprak'     => $row['lang'],
+			'fraga'     => cvai_mask_personal( $row['query'] ),
+			'status'    => $row['status'],
+			'traffar'   => array_map(
+				function ( $id ) use ( $titles, $lang ) {
+					return $titles[ $lang ][ $id ] ?? $id;
+				},
+				$ids
+			),
+			'tolkning'  => is_array( $interp ) ? $interp : array(),
+			'ms'        => (int) $row['ms'],
+			'tokens_in' => (int) $row['tokens_in'],
+			'tokens_ut' => (int) $row['tokens_out'],
+		);
+	}
+
+	if ( 'csv' === strtolower( (string) $req->get_param( 'format' ) ) ) {
+		$fh = fopen( 'php://temp', 'w+' );
+		fputcsv( $fh, array( 'tid', 'sprak', 'fraga', 'status', 'traffar', 'tolkning', 'ms', 'tokens_in', 'tokens_ut' ) );
+		foreach ( $out as $o ) {
+			$o['traffar']  = implode( ' | ', $o['traffar'] );
+			$o['tolkning'] = wp_json_encode( $o['tolkning'], JSON_UNESCAPED_UNICODE );
+			fputcsv( $fh, array_values( $o ) );
+		}
+		rewind( $fh );
+		$csv = stream_get_contents( $fh );
+		fclose( $fh );
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		echo "\xEF\xBB\xBF" . $csv; // phpcs:ignore WordPress.Security.EscapeOutput -- CSV-data
+		exit;
+	}
+
+	return new WP_REST_Response(
+		array(
+			'fran'     => $from,
+			'till'     => $to,
+			'antal'    => count( $out ),
+			'max'      => 5000,
+			'sokningar' => $out,
+		),
+		200
+	);
+}
+
+/** Daglig rensning av gammal sökhistorik enligt inställningen. */
+add_action(
+	'init',
+	function () {
+		if ( ! wp_next_scheduled( 'cvai_cleanup_log' ) ) {
+			wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', 'cvai_cleanup_log' );
+		}
+	}
+);
+add_action(
+	'cvai_cleanup_log',
+	function () {
+		$months = (int) cvai_opt( 'log_months' );
+		if ( $months <= 0 ) {
+			return;
+		}
+		global $wpdb;
+		$limit = wp_date( 'Y-m-d H:i:s', strtotime( '-' . $months . ' months' ) );
+		$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->prefix}cvai_log WHERE created < %s", $limit ) );
+	}
+);
+register_deactivation_hook(
+	__FILE__,
+	function () {
+		wp_clear_scheduled_hook( 'cvai_cleanup_log' );
+	}
+);
+
 function cvai_log( $lang, $q, $ids, $interp, $ms, $tin, $tout, $status ) {
 	if ( ! cvai_opt( 'log_enabled' ) ) {
 		return;
@@ -1156,6 +1317,7 @@ function cvai_sanitize_options( $in ) {
 	$out['include_dests']  = empty( $in['include_dests'] ) ? 0 : 1;
 	$out['dest_parent']    = trim( preg_replace( '#[^\p{L}\p{N}/_-]+#u', '', (string) ( $in['dest_parent'] ?? $old['dest_parent'] ?? '' ) ), '/' );
 	$out['log_enabled']    = empty( $in['log_enabled'] ) ? 0 : 1;
+	$out['log_months']     = max( 0, min( 120, (int) ( $in['log_months'] ?? 12 ) ) );
 	$out['rate_per_hour']  = max( 1, (int) ( $in['rate_per_hour'] ?? 20 ) );
 	$out['daily_cap']      = max( 1, (int) ( $in['daily_cap'] ?? 500 ) );
 	$out['examples']       = sanitize_textarea_field( $in['examples'] ?? '' );
@@ -1183,6 +1345,11 @@ function cvai_admin_page() {
 	global $wpdb;
 
 	$langs = cvai_active_langs();
+
+	if ( isset( $_POST['cvai_renew_key'] ) && check_admin_referer( 'cvai_renew_key' ) ) {
+		cvai_export_key( true );
+		echo '<div class="notice notice-success"><p>Ny exportnyckel skapad. Den gamla fungerar inte längre.</p></div>';
+	}
 
 	if ( isset( $_POST['cvai_rebuild'] ) && check_admin_referer( 'cvai_rebuild' ) ) {
 		cvai_flush_catalog();
@@ -1268,7 +1435,8 @@ function cvai_admin_page() {
 					<?php endforeach; ?>
 				</td></tr>
 				<tr><th>Extra regler till AI:n</th><td><textarea class="large-text" rows="4" name="cvai_options[extra_rules]"><?php echo esc_textarea( $o['extra_rules'] ); ?></textarea><p class="description">Gäller alla språk. T.ex. "Lyft gärna fram tågresor för kunder som vill undvika flyg."</p></td></tr>
-				<tr><th>Sökhistorik</th><td><label><input type="checkbox" name="cvai_options[log_enabled]" value="1" <?php checked( $o['log_enabled'] ); ?>> Spara sökningar (utan IP-adress)</label></td></tr>
+				<tr><th>Sökhistorik</th><td><label><input type="checkbox" name="cvai_options[log_enabled]" value="1" <?php checked( $o['log_enabled'] ); ?>> Spara sökningar (utan IP-adress)</label><br>
+					Rensa sökningar äldre än <input type="number" min="0" max="120" style="width:5em" name="cvai_options[log_months]" value="<?php echo (int) $o['log_months']; ?>"> månader <span class="description">(0 = spara för alltid)</span></td></tr>
 			</table>
 
 			<h2>Antal svar</h2>
@@ -1290,6 +1458,15 @@ function cvai_admin_page() {
 			</table>
 			<?php submit_button(); ?>
 		</form>
+
+		<h2>Export för analys</h2>
+		<p>Sökhistoriken kan hämtas som JSON eller CSV, t.ex. av en schemalagd uppgift. E-postadresser och telefonnummer i frågorna maskeras.</p>
+		<table class="form-table">
+			<tr><th>Adress</th><td><code><?php echo esc_html( rest_url( 'cvai/v1/historik' ) ); ?>?fran=ÅÅÅÅ-MM-DD&amp;till=ÅÅÅÅ-MM-DD&amp;format=json|csv</code><p class="description">Utan datum: de senaste 7 dagarna. Max 5 000 sökningar per hämtning.</p></td></tr>
+			<tr><th>Nyckel</th><td><input type="text" class="regular-text code" readonly onclick="this.select()" value="<?php echo esc_attr( cvai_export_key() ); ?>">
+				<p class="description">Skickas som <code>Authorization: Bearer &lt;nyckel&gt;</code> (eller <code>X-Cvai-Key: &lt;nyckel&gt;</code>). Dela den bara med den som ska hämta historiken.</p>
+				<form method="post" style="margin-top:6px"><?php wp_nonce_field( 'cvai_renew_key' ); ?><button class="button" name="cvai_renew_key" value="1" onclick="return confirm('Skapa ny nyckel? Den gamla slutar fungera.')">Byt nyckel</button></form></td></tr>
+		</table>
 
 		<h2>Senaste sökningarna</h2>
 		<p>Här ser du vad kunderna faktiskt efterfrågar – och vad de inte hittar (status <em>no_hits</em>).</p>
