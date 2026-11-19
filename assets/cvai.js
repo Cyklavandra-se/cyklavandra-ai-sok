@@ -28,6 +28,13 @@
 			'</div></article>';
 	}
 
+	function destCard(h) {
+		return '<a class="cvai-dest" href="' + esc(h.url) + '">' +
+			(h.img ? '<img src="' + esc(h.img) + '" alt="" loading="lazy">' : '') +
+			'<span class="cvai-dest-body"><strong class="cvai-dest-h">' + esc(h.title) + '</strong>' +
+			'<span class="cvai-dest-more">' + esc(t('dest_more', 'Till destinationssidan →')) + '</span></span></a>';
+	}
+
 	function render(root, d) {
 		var out = root.querySelector('.cvai-out');
 		var html = '';
@@ -44,6 +51,10 @@
 		if (d.alternatives && d.alternatives.length) {
 			html += '<h4 class="cvai-sub">' + esc(t('also', 'Kan också passa')) + '</h4><div class="cvai-grid">' +
 				d.alternatives.map(function (h) { return card(h, false); }).join('') + '</div>';
+		}
+		if (d.destinations && d.destinations.length) {
+			html += '<h4 class="cvai-sub">' + esc(t('dests', 'Läs mer om destinationen')) + '</h4><div class="cvai-dests">' +
+				d.destinations.map(destCard).join('') + '</div>';
 		}
 		if (!(d.hits && d.hits.length) && !(d.alternatives && d.alternatives.length)) {
 			html += '<p>' + esc(t('none', 'Vi hittade ingen resa som passar riktigt.')) + '</p>';

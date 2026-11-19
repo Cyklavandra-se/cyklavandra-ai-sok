@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.5.0
+ * Version:     1.6.0
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.5.0' );
+define( 'CVAI_VERSION', '1.6.0' );
 define( 'CVAI_DB_VERSION', '2' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -44,6 +44,8 @@ function cvai_defaults() {
 		'model'          => 'claude-sonnet-5-5',
 		'trip_tags'      => 'guidad, självguidad',
 		'include_events' => 1,
+		'include_dests'  => 1,
+		'dest_parent'    => 'information/hitta-resa/destinationer',
 		'rate_per_hour'  => 20,
 		'daily_cap'      => 500,
 		'examples'       => "Vi är 6 personer som vill vandra i Italien i oktober. Vi är ganska duktiga vandrare och har gått i Österrike många somrar.\nTvå pensionärer som vill cykla lugnt i maj, gärna med vin och god mat.\nJag vill på en guidad vandringsresa i höst och slippa planera själv.\nFamilj med två tonåringar som vill vandra i bergen i juli.",
@@ -389,9 +391,37 @@ function cvai_build_catalog( $lang ) {
 		}
 	}
 
+	// Destinationssidor: undersidor (i alla nivåer) till sidan Destinationer.
+	$dests      = array();
+	$dest_lines = array();
+	if ( cvai_opt( 'include_dests' ) ) {
+		foreach ( cvai_destination_pages( $lang ) as $d ) {
+			$key   = 'D' . $d['post']->ID;
+			$title = html_entity_decode( get_the_title( $d['post'] ), ENT_QUOTES, 'UTF-8' );
+			$land  = array();
+			foreach ( array( $title, $d['parent'] ) as $n ) {
+				$n = mb_strtolower( trim( (string) $n ) );
+				if ( '' !== $n && in_array( $n, $vocab['country'], true ) ) {
+					$land[] = $n;
+				}
+			}
+			$dests[ $key ] = array(
+				'title' => $title,
+				'url'   => get_permalink( $d['post'] ),
+				'img'   => get_the_post_thumbnail_url( $d['post'], 'medium_large' ) ?: '',
+				'land'  => array_values( array_unique( $land ) ),
+			);
+			$raw          = has_excerpt( $d['post'] ) ? $d['post']->post_excerpt . ' ' . $d['post']->post_content : $d['post']->post_content;
+			$dest_lines[] = sprintf( '%s | %s | %s | %s', $key, $title, $d['parent'] ? $d['parent'] : '-', cvai_clean_text( $raw, 300 ) );
+		}
+	}
+
 	$text = "RESOR (id | namn | taggar | nivå | beskrivning):\n" . implode( "\n", $lines );
 	if ( $event_lines ) {
 		$text .= "\n\nKOMMANDE GUIDADE AVGÅNGAR MED DATUM (id | namn | datum | beskrivning):\n" . implode( "\n", $event_lines );
+	}
+	if ( $dest_lines ) {
+		$text .= "\n\nDESTINATIONSSIDOR – inga resor, bara till fältet destinationer (id | namn | ingår i | beskrivning):\n" . implode( "\n", $dest_lines );
 	}
 
 	return array(
@@ -400,8 +430,62 @@ function cvai_build_catalog( $lang ) {
 		'cards'  => $cards,
 		'count'  => count( $lines ),
 		'events' => count( $event_lines ),
+		'dests'  => $dests,
 		'built'  => current_time( 'mysql' ),
 	);
+}
+
+/**
+ * Publicerade undersidor (alla nivåer) till destinationssidan i aktuellt språk.
+ * Sökvägen anges på huvudspråket; WPML ger översättningen.
+ *
+ * @return array<int, array{post: WP_Post, parent: string}>
+ */
+function cvai_destination_pages( $lang ) {
+	$path = trim( (string) cvai_opt( 'dest_parent' ), '/' );
+	if ( '' === $path ) {
+		return array();
+	}
+	$root = get_page_by_path( $path );
+	if ( ! $root ) {
+		return array();
+	}
+	$root_id = (int) apply_filters( 'wpml_object_id', $root->ID, 'page', false, $lang );
+	if ( ! $root_id ) {
+		return array();
+	}
+
+	$out   = array();
+	$queue = array( array( $root_id, '' ) );
+	$depth = 0;
+	while ( $queue && $depth < 4 && count( $out ) < 300 ) {
+		$next = array();
+		foreach ( $queue as $item ) {
+			list( $parent_id, $parent_title ) = $item;
+			$kids = get_posts(
+				array(
+					'post_type'        => 'page',
+					'post_status'      => 'publish',
+					'post_parent'      => $parent_id,
+					'numberposts'      => -1,
+					'orderby'          => 'menu_order title',
+					'order'            => 'ASC',
+					'suppress_filters' => false,
+				)
+			);
+			foreach ( $kids as $k ) {
+				$details = apply_filters( 'wpml_post_language_details', null, $k->ID );
+				if ( is_array( $details ) && ! empty( $details['language_code'] ) && $details['language_code'] !== $lang ) {
+					continue;
+				}
+				$out[]  = array( 'post' => $k, 'parent' => $parent_title );
+				$next[] = array( $k->ID, html_entity_decode( get_the_title( $k ), ENT_QUOTES, 'UTF-8' ) );
+			}
+		}
+		$queue = $next;
+		$depth++;
+	}
+	return $out;
 }
 
 /** Rensar Avada/Fusion-shortcodes och HTML till ren text. */
@@ -442,6 +526,7 @@ UPPGIFT:
 6. Använd ENDAST id:n ur katalogen. Ange för varje resa både id och namn från samma katalograd, och kontrollera att motiveringen handlar om just den resan. Hitta aldrig på resor, priser, datum eller avresedagar, och lova inte valfritt startdatum om det inte står i katalogen. Nämn bara pris om det står i katalogen.
 7. SPRÅK: Skriv sammanfattning, motiveringar och tolkning på det svarsspråk som anges i kundens meddelande. Om kunden tydligt skriver på ett annat språk, svara på kundens språk. Tilltala kunden med \"ni\"/motsvarande om de är flera, annars \"du\".
 8. Fyll i \"regler\" i verktyget INNAN du väljer resor: vilka extra regler som gäller för just den här frågan, och vilka länder de utesluter.
+9. DESTINATIONSSIDOR (id som börjar på D) är inga resor: lägg dem bara i fältet \"destinationer\", aldrig bland träffar eller alternativ. Ange högst 2, och bara när kunden nämner ett land, en region, en ö eller ett område som har en egen destinationssida. Välj den mest specifika sidan: nämner kunden Kanarieöarna, ta Kanarieöarna och inte Spanien; nämner kunden bara Spanien, ta Spanien. Nämner kunden ingen plats, lämna listan tom. Extra regler som utesluter länder gäller även destinationssidor.
 
 Svara ALLTID genom att anropa verktyget visa_resor, exakt en gång, och skriv ingen annan text.
 
@@ -496,6 +581,18 @@ function cvai_tool_schema() {
 				'sammanfattning' => array( 'type' => 'string', 'description' => '1–2 varma, konkreta meningar till kunden' ),
 				'traffar'        => array( 'type' => 'array', 'items' => $hit, 'description' => cvai_hits_range() . ' bästa resor' ),
 				'alternativ'     => array( 'type' => 'array', 'items' => $hit, 'description' => '0–' . (int) cvai_opt( 'max_alts' ) . ' alternativ som nästan passar' ),
+				'destinationer'  => array(
+					'type'        => 'array',
+					'description' => '0–2 destinationssidor (id som börjar på D), bara när kunden nämner en plats. Tom lista annars.',
+					'items'       => array(
+						'type'       => 'object',
+						'properties' => array(
+							'id'   => array( 'type' => 'string', 'description' => 'Id ur DESTINATIONSSIDOR, t.ex. D123' ),
+							'namn' => array( 'type' => 'string', 'description' => 'Sidans namn exakt som i katalogen' ),
+						),
+						'required'   => array( 'id', 'namn' ),
+					),
+				),
 			),
 			'required'   => array( 'sammanfattning', 'traffar' ),
 		),
@@ -703,6 +800,33 @@ function cvai_rest_search( WP_REST_Request $req ) {
 		}
 	}
 
+	// Destinationssidor: samma kontroll av id/namn och uteslutna länder som för resorna.
+	$dest_cards = (array) ( $catalog['dests'] ?? array() );
+	$dests      = array();
+	foreach ( (array) ( $data['destinationer'] ?? array() ) as $h ) {
+		if ( ! $dest_cards || count( $dests ) >= 2 ) {
+			break;
+		}
+		$id = cvai_resolve_hit( $dest_cards, (string) ( $h['id'] ?? '' ), (string) ( $h['namn'] ?? '' ) );
+		if ( $id !== (string) ( $h['id'] ?? '' ) ) {
+			$fixes[] = ( $h['id'] ?? '?' ) . '→' . ( $id ? $id : 'bort' ) . ' (' . mb_substr( (string) ( $h['namn'] ?? '' ), 0, 60 ) . ')';
+		}
+		if ( ! $id || isset( $dests[ $id ] ) ) {
+			continue;
+		}
+		if ( $excluded && array_intersect( $dest_cards[ $id ]['land'], $excluded ) ) {
+			$fixes[] = $id . '→bort (regel: ' . implode( ', ', array_intersect( $dest_cards[ $id ]['land'], $excluded ) ) . ')';
+			continue;
+		}
+		$dests[ $id ] = array(
+			'id'    => $id,
+			'title' => $dest_cards[ $id ]['title'],
+			'url'   => $dest_cards[ $id ]['url'],
+			'img'   => cvai_opt( 'show_images' ) ? $dest_cards[ $id ]['img'] : '',
+		);
+	}
+	$dests = array_values( $dests );
+
 	$interp = array();
 	foreach ( (array) ( $data['tolkning'] ?? array() ) as $k => $v ) {
 		if ( is_scalar( $v ) && '' !== trim( (string) $v ) ) {
@@ -720,6 +844,9 @@ function cvai_rest_search( WP_REST_Request $req ) {
 	if ( ! empty( $data['regler']['tillampade'] ) ) {
 		$log_interp['regler'] = sanitize_text_field( (string) $data['regler']['tillampade'] );
 	}
+	if ( $dests ) {
+		$log_interp['destinationer'] = implode( ', ', array_column( $dests, 'title' ) );
+	}
 	if ( $fixes ) {
 		$log_interp['korrigerade_id'] = implode( '; ', $fixes );
 	}
@@ -731,6 +858,7 @@ function cvai_rest_search( WP_REST_Request $req ) {
 			'interpretation' => $interp,
 			'hits'           => $hits,
 			'alternatives'   => $alts,
+			'destinations'   => $dests,
 		),
 		200
 	);
@@ -1009,6 +1137,8 @@ function cvai_sanitize_options( $in ) {
 	$out['model']          = sanitize_text_field( $in['model'] ?? $old['model'] );
 	$out['trip_tags']      = sanitize_text_field( $in['trip_tags'] ?? $old['trip_tags'] );
 	$out['include_events'] = empty( $in['include_events'] ) ? 0 : 1;
+	$out['include_dests']  = empty( $in['include_dests'] ) ? 0 : 1;
+	$out['dest_parent']    = trim( preg_replace( '#[^\p{L}\p{N}/_-]+#u', '', (string) ( $in['dest_parent'] ?? $old['dest_parent'] ?? '' ) ), '/' );
 	$out['log_enabled']    = empty( $in['log_enabled'] ) ? 0 : 1;
 	$out['rate_per_hour']  = max( 1, (int) ( $in['rate_per_hour'] ?? 20 ) );
 	$out['daily_cap']      = max( 1, (int) ( $in['daily_cap'] ?? 500 ) );
@@ -1075,13 +1205,14 @@ function cvai_admin_page() {
 			<li><strong>Sökningar i dag:</strong> <?php echo (int) $today; ?> av max <?php echo (int) $o['daily_cap']; ?></li>
 		</ul>
 		<table class="widefat" style="max-width:700px">
-			<thead><tr><th>Språk</th><th>Resor</th><th>Guidade avgångar</th><th>Storlek</th><th>Byggd</th></tr></thead>
+			<thead><tr><th>Språk</th><th>Resor</th><th>Guidade avgångar</th><th>Destinationer</th><th>Storlek</th><th>Byggd</th></tr></thead>
 			<tbody>
 			<?php foreach ( $catalogs as $l => $c ) : ?>
 				<tr>
 					<td><?php echo esc_html( $langs[ $l ] . ' (' . $l . ')' ); ?></td>
 					<td><?php echo (int) $c['count']; ?></td>
 					<td><?php echo (int) $c['events']; ?></td>
+					<td><?php echo count( (array) ( $c['dests'] ?? array() ) ); ?></td>
 					<td>ca <?php echo esc_html( number_format_i18n( mb_strlen( $c['text'] ) / 4 ) ); ?> tokens</td>
 					<td><?php echo esc_html( $c['built'] ); ?></td>
 				</tr>
@@ -1105,6 +1236,8 @@ function cvai_admin_page() {
 				<tr><th>Modell</th><td><input class="regular-text" name="cvai_options[model]" value="<?php echo esc_attr( $o['model'] ); ?>"><p class="description">Standard: <code>claude-sonnet-5-5</code> (följer reglerna bra, ca 0,20–1,20 kr per sökning). <code>claude-haiku-5-5</code> är billigast men följer extraregler sämre. <code>claude-opus-5-5</code> är dyrast och långsammast.</p></td></tr>
 				<tr><th>Taggar som markerar en resa</th><td><input class="regular-text" name="cvai_options[trip_tags]" value="<?php echo esc_attr( $o['trip_tags'] ); ?>"><p class="description">Kommaseparerat, på huvudspråket. Översatta taggar i WPML hittas automatiskt. Vanliga varianter (guidet, selvguidet, guided, self-guided m.fl.) känns också igen. Lägg till fler namn här om ett språk använder andra ord.</p></td></tr>
 				<tr><th>Guidade avgångar</th><td><label><input type="checkbox" name="cvai_options[include_events]" value="1" <?php checked( $o['include_events'] ); ?>> Ta med kommande evenemang från The Events Calendar</label></td></tr>
+				<tr><th>Destinationssidor</th><td><label><input type="checkbox" name="cvai_options[include_dests]" value="1" <?php checked( $o['include_dests'] ); ?>> Visa destinationssidor längst ner när kunden nämner en plats</label><br>
+					<input class="regular-text" name="cvai_options[dest_parent]" value="<?php echo esc_attr( $o['dest_parent'] ); ?>"><p class="description">Sökväg till sidan vars undersidor är destinationer, på huvudspråket (t.ex. <code>information/hitta-resa/destinationer</code>). Översättningarna hittas via WPML.</p></td></tr>
 				<tr><th>Max sökningar per besökare/timme</th><td><input type="number" min="1" name="cvai_options[rate_per_hour]" value="<?php echo (int) $o['rate_per_hour']; ?>"></td></tr>
 				<tr><th>Max sökningar per dygn (totalt)</th><td><input type="number" min="1" name="cvai_options[daily_cap]" value="<?php echo (int) $o['daily_cap']; ?>"><p class="description">Kostnadsspärr för alla språk tillsammans.</p></td></tr>
 				<tr><th>Exempelfrågor</th><td>
