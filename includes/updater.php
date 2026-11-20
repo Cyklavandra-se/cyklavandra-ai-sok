@@ -32,10 +32,12 @@ function cvai_updater_release( $force = false ) {
 		return empty( $cached['version'] ) ? null : $cached;
 	}
 
+	// Först github.com (ingen gräns på 60 anrop/timme per IP, som API:et har på delade
+	// webbhotell), sedan API:et som reserv. Releasetexten hämtas från API:et först vid "Visa detaljer".
 	$errors  = array();
-	$release = cvai_updater_from_api( $errors );
+	$release = cvai_updater_from_web( $errors );
 	if ( ! $release ) {
-		$release = cvai_updater_from_web( $errors );
+		$release = cvai_updater_from_api( $errors );
 	}
 
 	update_option(
@@ -49,7 +51,8 @@ function cvai_updater_release( $force = false ) {
 		false
 	);
 
-	set_site_transient( 'cvai_gh_release', $release, $release ? 6 * HOUR_IN_SECONDS : HOUR_IN_SECONDS );
+	// Ett misslyckande sparas också (som tom version), annars frågar varje sidvisning GitHub igen.
+	set_site_transient( 'cvai_gh_release', $release ? $release : array( 'version' => '' ), $release ? 6 * HOUR_IN_SECONDS : HOUR_IN_SECONDS );
 	return $release ? $release : null;
 }
 
@@ -211,6 +214,15 @@ add_filter(
 		if ( ! $release ) {
 			return $result;
 		}
+		if ( '' === trim( $release['changelog'] ) ) {
+			// Releasetexten finns bara i API:et; ett misslyckat försök gör inget.
+			$ignored = array();
+			$api     = cvai_updater_from_api( $ignored );
+			if ( $api && $api['version'] === $release['version'] ) {
+				$release['changelog'] = $api['changelog'];
+				$release['published'] = $api['published'];
+			}
+		}
 		$changelog = '' !== trim( $release['changelog'] )
 			? wpautop( esc_html( $release['changelog'] ) )
 			: '<p>Se <a href="' . esc_url( $release['url'] ) . '">releasen på GitHub</a>.</p>';
@@ -323,7 +335,7 @@ add_action(
 		} else {
 			$msg .= 'Senaste på GitHub är ' . esc_html( $found ) . ', du har den senaste.';
 		}
-		if ( $errors ) {
+		if ( $errors && ! $found ) { // Fel visas bara när ingen version hittades.
 			$msg .= '<br><small>' . implode( '<br>', array_map( 'esc_html', $errors ) ) . '</small>';
 		}
 		echo '<div class="notice ' . esc_attr( $class ) . ' is-dismissible"><p>' . $msg . '</p></div>'; // phpcs:ignore WordPress.Security.EscapeOutput
