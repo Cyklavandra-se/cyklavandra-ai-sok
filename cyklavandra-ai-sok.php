@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.8.0
+ * Version:     1.8.1
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.8.0' );
+define( 'CVAI_VERSION', '1.8.1' );
 define( 'CVAI_DB_VERSION', '4' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -872,6 +872,9 @@ function cvai_rest_search( WP_REST_Request $req ) {
 	if ( rest_sanitize_boolean( $req->get_param( 'exempel' ) ) ) {
 		$log_interp['kalla'] = 'exempelknapp'; // startad med en exempelknapp, inte kundens egen text
 	}
+	if ( cvai_is_internal_request() ) {
+		$log_interp['intern'] = 1; // inloggad redaktör/admin – egna tester
+	}
 	if ( ! empty( $data['regler']['tillampade'] ) ) {
 		$log_interp['regler'] = sanitize_text_field( (string) $data['regler']['tillampade'] );
 	}
@@ -1052,6 +1055,7 @@ function cvai_rest_history( WP_REST_Request $req ) {
 			'sprak'     => $row['lang'],
 			'besokare'  => (string) ( $row['visitor'] ?? '' ),
 			'exempelknapp' => is_array( $interp ) && 'exempelknapp' === ( $interp['kalla'] ?? '' ),
+			'intern'    => is_array( $interp ) && ! empty( $interp['intern'] ),
 			'fraga'     => cvai_mask_personal( $row['query'] ),
 			'status'    => $row['status'],
 			'klick'     => cvai_clicks_readable( $row['clicks'] ?? '', $titles[ $lang ] ),
@@ -1070,7 +1074,7 @@ function cvai_rest_history( WP_REST_Request $req ) {
 
 	if ( 'csv' === strtolower( (string) $req->get_param( 'format' ) ) ) {
 		$fh = fopen( 'php://temp', 'w+' );
-		fputcsv( $fh, array( 'tid', 'sprak', 'besokare', 'exempelknapp', 'fraga', 'status', 'klick', 'traffar', 'tolkning', 'ms', 'tokens_in', 'tokens_ut' ) );
+		fputcsv( $fh, array( 'tid', 'sprak', 'besokare', 'exempelknapp', 'intern', 'fraga', 'status', 'klick', 'traffar', 'tolkning', 'ms', 'tokens_in', 'tokens_ut' ) );
 		foreach ( $out as $o ) {
 			$o['traffar']  = implode( ' | ', $o['traffar'] );
 			$o['klick']    = implode( ' | ', array_map( function ( $k ) { return $k['namn'] . ' (' . $k['del'] . ' ' . $k['plats'] . ')'; }, $o['klick'] ) );
@@ -1131,6 +1135,16 @@ register_deactivation_hook(
  */
 function cvai_visitor_id() {
 	return substr( hash_hmac( 'sha256', cvai_client_ip() . '|' . gmdate( 'Y-m' ), wp_salt( 'nonce' ) . 'cvai-besokare' ), 0, 10 );
+}
+
+/**
+ * Sökning från inloggad personal (behörighet edit_posts). Inloggningskakan läses direkt,
+ * eftersom REST utan nonce annars ser alla som utloggade – och en nonce i sidan går inte
+ * att använda när sidan cachas.
+ */
+function cvai_is_internal_request() {
+	$uid = (int) wp_validate_auth_cookie( '', 'logged_in' );
+	return $uid > 0 && user_can( $uid, 'edit_posts' );
 }
 
 /** Sparar sökningen och returnerar dess id (0 om sökhistoriken är avstängd). */
@@ -1569,7 +1583,7 @@ function cvai_admin_page() {
 					<td><?php echo esc_html( $r->created ); ?></td>
 					<td><?php echo esc_html( $rl ); ?></td>
 					<td><code><?php echo esc_html( $r->visitor ?? '' ); ?></code></td>
-					<td><?php echo esc_html( $r->query ); ?><?php echo is_array( $interp ) && 'exempelknapp' === ( $interp['kalla'] ?? '' ) ? ' <em style="color:#646970">(exempelknapp)</em>' : ''; ?></td>
+					<td><?php echo esc_html( $r->query ); ?><?php echo is_array( $interp ) && 'exempelknapp' === ( $interp['kalla'] ?? '' ) ? ' <em style="color:#646970">(exempelknapp)</em>' : ''; ?><?php echo is_array( $interp ) && ! empty( $interp['intern'] ) ? ' <em style="color:#646970">(intern)</em>' : ''; ?></td>
 					<td><?php echo esc_html( is_array( $interp ) ? implode( ' · ', $interp ) : '' ); ?></td>
 					<td><?php echo esc_html( implode( ', ', $titles ) ); ?></td>
 					<td><?php echo esc_html( implode( ', ', array_map( function ( $k ) { return $k['namn'] . ' (' . $k['del'] . ')'; }, cvai_clicks_readable( $r->clicks ?? '', wp_list_pluck( $cards, 'title' ) ) ) ) ); ?></td>

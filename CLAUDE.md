@@ -27,6 +27,8 @@ här sökningen ska bli grunden till en ny förstasida.
     Kolumnen `visitor` = `cvai_visitor_id()` (HMAC av IP + månad med `wp_salt`), aldrig rå IP.
     Sökningar från exempelknapparna skickar `exempel: true` och loggas med `kalla: exempelknapp` i tolkningen
     (fältet `exempelknapp` i exporten).
+    Inloggad personal (`edit_posts`, via `wp_validate_auth_cookie` – ingen nonce p.g.a. sidcache) loggas
+    med `intern: 1` (fältet `intern` i exporten).
   - **Klick** `POST /wp-json/cvai/v1/klick {sok, token, id, del, plats}` via `sendBeacon`; `token` =
     `cvai_click_token(sok)`. Sparas i loggkolumnen `clicks` (`P123:best:1,…`, DB-version 4).
   - **Sparat resultat**: frontend sparar svaret i `sessionStorage` (30 min, per sida och språk) och
