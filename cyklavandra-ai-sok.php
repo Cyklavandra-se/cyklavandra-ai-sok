@@ -26,7 +26,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 }
 
 define( 'CVAI_VERSION', '1.7.0' );
-define( 'CVAI_DB_VERSION', '2' );
+define( 'CVAI_DB_VERSION', '3' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
 
@@ -182,6 +182,7 @@ function cvai_install() {
 			tokens_in INT UNSIGNED NOT NULL DEFAULT 0,
 			tokens_out INT UNSIGNED NOT NULL DEFAULT 0,
 			status VARCHAR(20) NOT NULL DEFAULT 'ok',
+			visitor VARCHAR(16) NOT NULL DEFAULT '',
 			PRIMARY KEY  (id),
 			KEY created (created)
 		) $charset;"
@@ -1034,6 +1035,7 @@ function cvai_rest_history( WP_REST_Request $req ) {
 		$out[]  = array(
 			'tid'       => $row['created'],
 			'sprak'     => $row['lang'],
+			'besokare'  => (string) ( $row['visitor'] ?? '' ),
 			'fraga'     => cvai_mask_personal( $row['query'] ),
 			'status'    => $row['status'],
 			'traffar'   => array_map(
@@ -1051,7 +1053,7 @@ function cvai_rest_history( WP_REST_Request $req ) {
 
 	if ( 'csv' === strtolower( (string) $req->get_param( 'format' ) ) ) {
 		$fh = fopen( 'php://temp', 'w+' );
-		fputcsv( $fh, array( 'tid', 'sprak', 'fraga', 'status', 'traffar', 'tolkning', 'ms', 'tokens_in', 'tokens_ut' ) );
+		fputcsv( $fh, array( 'tid', 'sprak', 'besokare', 'fraga', 'status', 'traffar', 'tolkning', 'ms', 'tokens_in', 'tokens_ut' ) );
 		foreach ( $out as $o ) {
 			$o['traffar']  = implode( ' | ', $o['traffar'] );
 			$o['tolkning'] = wp_json_encode( $o['tolkning'], JSON_UNESCAPED_UNICODE );
@@ -1105,6 +1107,14 @@ register_deactivation_hook(
 	}
 );
 
+/**
+ * Anonymt besökar-id: HMAC av IP-adressen med sajtens hemliga salt och aktuell månad.
+ * Samma besökare får samma kod under en kalendermånad; IP-adressen sparas aldrig.
+ */
+function cvai_visitor_id() {
+	return substr( hash_hmac( 'sha256', cvai_client_ip() . '|' . gmdate( 'Y-m' ), wp_salt( 'nonce' ) . 'cvai-besokare' ), 0, 10 );
+}
+
 function cvai_log( $lang, $q, $ids, $interp, $ms, $tin, $tout, $status ) {
 	if ( ! cvai_opt( 'log_enabled' ) ) {
 		return;
@@ -1122,6 +1132,7 @@ function cvai_log( $lang, $q, $ids, $interp, $ms, $tin, $tout, $status ) {
 			'tokens_in'      => $tin,
 			'tokens_out'     => $tout,
 			'status'         => $status,
+			'visitor'        => cvai_visitor_id(),
 		)
 	);
 }
@@ -1471,10 +1482,10 @@ function cvai_admin_page() {
 		<h2>Senaste sökningarna</h2>
 		<p>Här ser du vad kunderna faktiskt efterfrågar – och vad de inte hittar (status <em>no_hits</em>).</p>
 		<table class="widefat striped">
-			<thead><tr><th style="width:130px">Tid</th><th style="width:50px">Språk</th><th>Sökning</th><th>Tolkning</th><th>Träffar</th><th style="width:70px">ms</th><th style="width:80px">Status</th></tr></thead>
+			<thead><tr><th style="width:130px">Tid</th><th style="width:50px">Språk</th><th style="width:95px" title="Anonym kod per besökare och månad (inte IP-adress)">Besökare</th><th>Sökning</th><th>Tolkning</th><th>Träffar</th><th style="width:70px">ms</th><th style="width:80px">Status</th></tr></thead>
 			<tbody>
 			<?php if ( ! $rows ) : ?>
-				<tr><td colspan="7">Inga sökningar ännu.</td></tr>
+				<tr><td colspan="8">Inga sökningar ännu.</td></tr>
 			<?php endif; ?>
 			<?php foreach ( (array) $rows as $r ) : ?>
 				<?php
@@ -1489,6 +1500,7 @@ function cvai_admin_page() {
 				<tr>
 					<td><?php echo esc_html( $r->created ); ?></td>
 					<td><?php echo esc_html( $rl ); ?></td>
+					<td><code><?php echo esc_html( $r->visitor ?? '' ); ?></code></td>
 					<td><?php echo esc_html( $r->query ); ?></td>
 					<td><?php echo esc_html( is_array( $interp ) ? implode( ' · ', $interp ) : '' ); ?></td>
 					<td><?php echo esc_html( implode( ', ', $titles ) ); ?></td>

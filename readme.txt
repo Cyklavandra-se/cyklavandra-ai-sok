@@ -43,4 +43,4 @@ Rubrik och ingress skrivs fritt i Avada ovanför shortcoden.
 * Katalogen cachas i 24 timmar och byggs om automatiskt när en sida eller tagg sparas.
 * Sökningen går via WordPress-servern till Claude – API-nyckeln syns aldrig för besökaren.
 * Spärrar: max sökningar per besökare och timme samt max per dygn (kostnadstak).
-* Sökhistorik sparas utan IP-adress och visas under Cykla&Vandra → AI-sök.
+* Sökhistorik sparas utan IP-adress (bara en anonym besökarkod som byts varje månad) och visas under Cykla&Vandra → AI-sök.

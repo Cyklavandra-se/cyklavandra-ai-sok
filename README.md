@@ -71,7 +71,7 @@ vanliga uppdateringar under **Tillägg** och **Kontrollpanel → Uppdateringar**
 
 ## Versioner
 
-- **1.7.0** – Export av sökhistoriken för analys: `GET /wp-json/cvai/v1/historik?fran=&till=&format=json|csv` med hemlig nyckel (visas och kan bytas i admin). E-post och telefonnummer maskeras, resornas namn följer med. Sökhistoriken rensas automatiskt efter 12 månader (inställbart).
+- **1.7.0** – Export av sökhistoriken för analys: `GET /wp-json/cvai/v1/historik?fran=&till=&format=json|csv` med hemlig nyckel (visas och kan bytas i admin). E-post och telefonnummer maskeras, resornas namn följer med. Sökhistoriken rensas automatiskt efter 12 månader (inställbart). Varje sökning får ett anonymt besökar-id (kod av IP-adressen, byts varje månad; IP-adressen sparas inte), så att upprepade sökningar från samma besökare syns.
 - **1.6.2** – Kartan (`[resekarta]`) döljs automatiskt när kunden söker och visas igen om sökningen misslyckas. Annat kan döljas med CSS-klassen `cvai-dolj` i Avada eller shortcode-attributet `dolj`.
 - **1.6.1** – Destinationskortet har samma storlek och layout som resekorten, med en kort text från sidan. Rubrikerna "Bäst för er", "Kan också passa" och "Läs mer om destinationen" är H2 med temats rubrikstil.
 - **1.6.0** – Destinationssidor i sökningen: undersidorna till Destinationer läses in, och när kunden nämner ett land eller en region visas den mest specifika destinationssidan längst ner ("Läs mer om destinationen"). Kan stängas av och sökvägen ändras i inställningarna.
