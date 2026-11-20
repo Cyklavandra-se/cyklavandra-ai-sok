@@ -15,10 +15,10 @@
 		niva: t('lbl_niva', 'Nivå'), antal: t('lbl_antal', 'Antal'), ovrigt: t('lbl_ovrigt', 'Övrigt')
 	};
 
-	function card(h, top) {
+	function card(h, top, del, pos) {
 		var meta = (h.meta || []).map(function (m) { return '<span class="cvai-m">' + esc(m) + '</span>'; }).join('');
 		if (h.level) meta += '<span class="cvai-m cvai-lvl">' + esc(h.level) + '</span>';
-		return '<article class="cvai-card' + (top ? ' cvai-top' : '') + '">' +
+		return '<article class="cvai-card' + (top ? ' cvai-top' : '') + '" data-id="' + esc(h.id) + '" data-del="' + del + '" data-pos="' + pos + '">' +
 			(h.img ? '<a class="cvai-img" href="' + esc(h.url) + '"><img src="' + esc(h.img) + '" alt="" loading="lazy"></a>' : '') +
 			'<div class="cvai-body">' +
 			'<div class="cvai-meta">' + meta + '</div>' +
@@ -29,8 +29,8 @@
 	}
 
 	// Samma kortlayout som resorna, med en kort text från destinationssidan.
-	function destCard(h) {
-		return '<article class="cvai-card cvai-destcard">' +
+	function destCard(h, i) {
+		return '<article class="cvai-card cvai-destcard" data-id="' + esc(h.id) + '" data-del="dest" data-pos="' + (i + 1) + '">' +
 			(h.img ? '<a class="cvai-img" href="' + esc(h.url) + '"><img src="' + esc(h.img) + '" alt="" loading="lazy"></a>' : '') +
 			'<div class="cvai-body">' +
 			'<h3 class="cvai-h"><a href="' + esc(h.url) + '">' + esc(h.title) + '</a></h3>' +
@@ -50,11 +50,11 @@
 		if (d.summary) html += '<p class="cvai-summary">' + esc(d.summary) + '</p>';
 		if (d.hits && d.hits.length) {
 			html += '<h2 class="cvai-sub">' + esc(t('best', 'Bäst för er')) + '</h2><div class="cvai-grid">' +
-				d.hits.map(function (h, i) { return card(h, i === 0); }).join('') + '</div>';
+				d.hits.map(function (h, i) { return card(h, i === 0, 'best', i + 1); }).join('') + '</div>';
 		}
 		if (d.alternatives && d.alternatives.length) {
 			html += '<h2 class="cvai-sub">' + esc(t('also', 'Kan också passa')) + '</h2><div class="cvai-grid">' +
-				d.alternatives.map(function (h) { return card(h, false); }).join('') + '</div>';
+				d.alternatives.map(function (h, i) { return card(h, false, 'also', i + 1); }).join('') + '</div>';
 		}
 		if (d.destinations && d.destinations.length) {
 			html += '<h2 class="cvai-sub">' + esc(t('dests', 'Läs mer om destinationen')) + '</h2><div class="cvai-grid">' +
@@ -64,6 +64,37 @@
 			html += '<p>' + esc(t('none', 'Vi hittade ingen resa som passar riktigt.')) + '</p>';
 		}
 		out.innerHTML = html;
+		out.setAttribute('data-sok', d.sok || '');
+		out.setAttribute('data-token', d.token || '');
+	}
+
+	// Sparat resultat i fliken (sessionStorage), så att det finns kvar när kunden går tillbaka.
+	var STORE_MAX_AGE = 30 * 60 * 1000;
+	function storeKey() { return 'cvai:' + location.pathname + ':' + (data.lang || ''); }
+	function storeGet() {
+		try {
+			var v = JSON.parse(sessionStorage.getItem(storeKey()) || 'null');
+			return v && v.d && Date.now() - v.t < STORE_MAX_AGE ? v : null;
+		} catch (e) { return null; }
+	}
+	function storeSet(v) {
+		try { sessionStorage.setItem(storeKey(), JSON.stringify(v)); } catch (e) { /* privat läge m.m. */ }
+	}
+
+	// Klick på en resa/destination skickas i bakgrunden (sendBeacon stoppar inte sidbytet).
+	function trackClick(out, el) {
+		var a = el.closest ? el.closest('a') : null;
+		var card = a && a.closest('.cvai-card');
+		var sok = out.getAttribute('data-sok');
+		if (!card || !sok || !data.clickUrl) return;
+		var body = JSON.stringify({
+			sok: Number(sok), token: out.getAttribute('data-token'),
+			id: card.getAttribute('data-id'), del: card.getAttribute('data-del'), plats: Number(card.getAttribute('data-pos'))
+		});
+		try {
+			if (navigator.sendBeacon && navigator.sendBeacon(data.clickUrl, new Blob([body], { type: 'application/json' }))) return;
+		} catch (e) { /* faller tillbaka på fetch */ }
+		try { fetch(data.clickUrl, { method: 'POST', credentials: 'same-origin', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: body }); } catch (e) {}
 	}
 
 	function init(root) {
@@ -138,6 +169,7 @@
 					if (!res.ok || res.j.error) throw new Error(res.j.error || t('err_generic', 'Något gick fel.'));
 					status.innerHTML = '';
 					render(root, res.j);
+					storeSet({ t: Date.now(), q: text, d: res.j });
 					var top = root.querySelector('.cvai-out');
 					if (top && top.scrollIntoView && window.innerWidth < 800) top.scrollIntoView({ behavior: 'smooth', block: 'start' });
 				})
@@ -147,6 +179,27 @@
 					status.innerHTML = '<span class="cvai-err">' + esc(e.message || t('err_generic', 'Något gick fel. Försök igen.')) + '</span>';
 				})
 				.then(function () { busy = false; btn.disabled = false; });
+		}
+
+		var out = root.querySelector('.cvai-out');
+		out.addEventListener('click', function (e) { trackClick(out, e.target); });
+		out.addEventListener('auxclick', function (e) { if (e.button === 1) trackClick(out, e.target); }); // mittenklick = ny flik
+
+		// Spara var på sidan kunden var när de lämnar, och visa det sparade resultatet när de kommer tillbaka.
+		window.addEventListener('pagehide', function () {
+			var v = storeGet();
+			if (v && v.q === q.value.trim()) { v.y = window.scrollY; storeSet(v); }
+		});
+		var saved = storeGet();
+		if (saved) {
+			q.value = saved.q;
+			if (chips) chips.hidden = true;
+			toggleExtras(true);
+			render(root, saved.d);
+			if (typeof saved.y === 'number') {
+				if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+				setTimeout(function () { window.scrollTo(0, saved.y); }, 0);
+			}
 		}
 
 		form.addEventListener('submit', function (e) { e.preventDefault(); run(); });

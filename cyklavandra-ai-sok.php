@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.7.2
+ * Version:     1.8.0
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,8 +25,8 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.7.2' );
-define( 'CVAI_DB_VERSION', '3' );
+define( 'CVAI_VERSION', '1.8.0' );
+define( 'CVAI_DB_VERSION', '4' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
 
@@ -183,6 +183,7 @@ function cvai_install() {
 			tokens_out INT UNSIGNED NOT NULL DEFAULT 0,
 			status VARCHAR(20) NOT NULL DEFAULT 'ok',
 			visitor VARCHAR(16) NOT NULL DEFAULT '',
+			clicks TEXT NULL,
 			PRIMARY KEY  (id),
 			KEY created (created)
 		) $charset;"
@@ -625,6 +626,15 @@ add_action(
 		);
 		register_rest_route(
 			'cvai/v1',
+			'/klick',
+			array(
+				'methods'             => 'POST',
+				'callback'            => 'cvai_rest_click',
+				'permission_callback' => '__return_true',
+			)
+		);
+		register_rest_route(
+			'cvai/v1',
 			'/search',
 			array(
 				'methods'             => 'POST',
@@ -871,7 +881,7 @@ function cvai_rest_search( WP_REST_Request $req ) {
 	if ( $fixes ) {
 		$log_interp['korrigerade_id'] = implode( '; ', $fixes );
 	}
-	cvai_log( $lang, $q, array_column( $hits, 'id' ), $log_interp, $ms, $tok_in, $tok_out, $hits ? 'ok' : 'no_hits' );
+	$log_id = cvai_log( $lang, $q, array_column( $hits, 'id' ), $log_interp, $ms, $tok_in, $tok_out, $hits ? 'ok' : 'no_hits' );
 
 	return new WP_REST_Response(
 		array(
@@ -880,6 +890,8 @@ function cvai_rest_search( WP_REST_Request $req ) {
 			'hits'           => $hits,
 			'alternatives'   => $alts,
 			'destinations'   => $dests,
+			'sok'            => $log_id,
+			'token'          => $log_id ? cvai_click_token( $log_id ) : '',
 		),
 		200
 	);
@@ -1042,6 +1054,7 @@ function cvai_rest_history( WP_REST_Request $req ) {
 			'exempelknapp' => is_array( $interp ) && 'exempelknapp' === ( $interp['kalla'] ?? '' ),
 			'fraga'     => cvai_mask_personal( $row['query'] ),
 			'status'    => $row['status'],
+			'klick'     => cvai_clicks_readable( $row['clicks'] ?? '', $titles[ $lang ] ),
 			'traffar'   => array_map(
 				function ( $id ) use ( $titles, $lang ) {
 					return $titles[ $lang ][ $id ] ?? $id;
@@ -1057,9 +1070,10 @@ function cvai_rest_history( WP_REST_Request $req ) {
 
 	if ( 'csv' === strtolower( (string) $req->get_param( 'format' ) ) ) {
 		$fh = fopen( 'php://temp', 'w+' );
-		fputcsv( $fh, array( 'tid', 'sprak', 'besokare', 'exempelknapp', 'fraga', 'status', 'traffar', 'tolkning', 'ms', 'tokens_in', 'tokens_ut' ) );
+		fputcsv( $fh, array( 'tid', 'sprak', 'besokare', 'exempelknapp', 'fraga', 'status', 'klick', 'traffar', 'tolkning', 'ms', 'tokens_in', 'tokens_ut' ) );
 		foreach ( $out as $o ) {
 			$o['traffar']  = implode( ' | ', $o['traffar'] );
+			$o['klick']    = implode( ' | ', array_map( function ( $k ) { return $k['namn'] . ' (' . $k['del'] . ' ' . $k['plats'] . ')'; }, $o['klick'] ) );
 			$o['tolkning'] = wp_json_encode( $o['tolkning'], JSON_UNESCAPED_UNICODE );
 			fputcsv( $fh, array_values( $o ) );
 		}
@@ -1119,9 +1133,10 @@ function cvai_visitor_id() {
 	return substr( hash_hmac( 'sha256', cvai_client_ip() . '|' . gmdate( 'Y-m' ), wp_salt( 'nonce' ) . 'cvai-besokare' ), 0, 10 );
 }
 
+/** Sparar sökningen och returnerar dess id (0 om sökhistoriken är avstängd). */
 function cvai_log( $lang, $q, $ids, $interp, $ms, $tin, $tout, $status ) {
 	if ( ! cvai_opt( 'log_enabled' ) ) {
-		return;
+		return 0;
 	}
 	global $wpdb;
 	$wpdb->insert(
@@ -1139,6 +1154,54 @@ function cvai_log( $lang, $q, $ids, $interp, $ms, $tin, $tout, $status ) {
 			'visitor'        => cvai_visitor_id(),
 		)
 	);
+	return (int) $wpdb->insert_id;
+}
+
+/** Kort signatur så att klick bara kan registreras på sökningar som sajten själv har svarat på. */
+function cvai_click_token( $log_id ) {
+	return substr( hash_hmac( 'sha256', 'klick|' . (int) $log_id, wp_salt( 'nonce' ) . 'cvai-klick' ), 0, 16 );
+}
+
+/** POST /cvai/v1/klick {sok, token, id, del, plats} – registrerar vilken länk kunden klickade på. */
+function cvai_rest_click( WP_REST_Request $req ) {
+	if ( ! cvai_same_origin() ) {
+		return new WP_REST_Response( null, 403 );
+	}
+	$log_id = (int) $req->get_param( 'sok' );
+	$token  = (string) $req->get_param( 'token' );
+	$id     = (string) $req->get_param( 'id' );
+	$del    = (string) $req->get_param( 'del' );
+	$plats  = (int) $req->get_param( 'plats' );
+	if ( $log_id <= 0 || ! hash_equals( cvai_click_token( $log_id ), $token ) || ! preg_match( '/^[PED]\d{1,10}$/', $id ) || ! in_array( $del, array( 'best', 'also', 'dest' ), true ) || $plats < 1 || $plats > 20 ) {
+		return new WP_REST_Response( null, 400 );
+	}
+	global $wpdb;
+	$table = $wpdb->prefix . 'cvai_log';
+	$row   = $wpdb->get_row( $wpdb->prepare( "SELECT created, clicks FROM $table WHERE id = %d", $log_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	if ( ! $row || strtotime( $row->created ) < strtotime( current_time( 'mysql' ) ) - DAY_IN_SECONDS ) {
+		return new WP_REST_Response( null, 404 );
+	}
+	$clicks = array_filter( explode( ',', (string) $row->clicks ) );
+	if ( count( $clicks ) < 30 ) {
+		$clicks[] = $id . ':' . $del . ':' . $plats;
+		$wpdb->update( $table, array( 'clicks' => implode( ',', $clicks ) ), array( 'id' => $log_id ) );
+	}
+	return new WP_REST_Response( null, 204 );
+}
+
+/** "P123:best:1,D9:dest:1" → läsbar lista med namn. */
+function cvai_clicks_readable( $raw, $titles ) {
+	$names = array( 'best' => 'bäst', 'also' => 'alternativ', 'dest' => 'destination' );
+	$out   = array();
+	foreach ( array_filter( explode( ',', (string) $raw ) ) as $c ) {
+		$p     = explode( ':', $c );
+		$out[] = array(
+			'namn'  => $titles[ $p[0] ] ?? $p[0],
+			'del'   => $names[ $p[1] ?? '' ] ?? ( $p[1] ?? '' ),
+			'plats' => (int) ( $p[2] ?? 0 ),
+		);
+	}
+	return $out;
 }
 
 /* -------------------------------------------------------------------------
@@ -1191,6 +1254,7 @@ function cvai_shortcode( $atts ) {
 		'cvaiData',
 		array(
 			'endpoint' => esc_url_raw( rest_url( 'cvai/v1/search' ) ),
+			'clickUrl' => esc_url_raw( rest_url( 'cvai/v1/klick' ) ),
 			'lang'     => $lang,
 			'examples' => $examples,
 			'i18n'     => cvai_js_strings( $lang ),
@@ -1486,15 +1550,15 @@ function cvai_admin_page() {
 		<h2>Senaste sökningarna</h2>
 		<p>Här ser du vad kunderna faktiskt efterfrågar – och vad de inte hittar (status <em>no_hits</em>).</p>
 		<table class="widefat striped">
-			<thead><tr><th style="width:130px">Tid</th><th style="width:50px">Språk</th><th style="width:95px" title="Anonym kod per besökare och månad (inte IP-adress)">Besökare</th><th>Sökning</th><th>Tolkning</th><th>Träffar</th><th style="width:70px">ms</th><th style="width:80px">Status</th></tr></thead>
+			<thead><tr><th style="width:130px">Tid</th><th style="width:50px">Språk</th><th style="width:95px" title="Anonym kod per besökare och månad (inte IP-adress)">Besökare</th><th>Sökning</th><th>Tolkning</th><th>Träffar</th><th>Klick</th><th style="width:70px">ms</th><th style="width:80px">Status</th></tr></thead>
 			<tbody>
 			<?php if ( ! $rows ) : ?>
-				<tr><td colspan="8">Inga sökningar ännu.</td></tr>
+				<tr><td colspan="9">Inga sökningar ännu.</td></tr>
 			<?php endif; ?>
 			<?php foreach ( (array) $rows as $r ) : ?>
 				<?php
 				$rl     = $r->lang ?? '';
-				$cards  = isset( $catalogs[ $rl ] ) ? $catalogs[ $rl ]['cards'] : array();
+				$cards  = isset( $catalogs[ $rl ] ) ? array_merge( $catalogs[ $rl ]['cards'], (array) ( $catalogs[ $rl ]['dests'] ?? array() ) ) : array();
 				$titles = array();
 				foreach ( array_filter( explode( ',', (string) $r->hits ) ) as $id ) {
 					$titles[] = $cards[ $id ]['title'] ?? $id;
@@ -1508,6 +1572,7 @@ function cvai_admin_page() {
 					<td><?php echo esc_html( $r->query ); ?><?php echo is_array( $interp ) && 'exempelknapp' === ( $interp['kalla'] ?? '' ) ? ' <em style="color:#646970">(exempelknapp)</em>' : ''; ?></td>
 					<td><?php echo esc_html( is_array( $interp ) ? implode( ' · ', $interp ) : '' ); ?></td>
 					<td><?php echo esc_html( implode( ', ', $titles ) ); ?></td>
+					<td><?php echo esc_html( implode( ', ', array_map( function ( $k ) { return $k['namn'] . ' (' . $k['del'] . ')'; }, cvai_clicks_readable( $r->clicks ?? '', wp_list_pluck( $cards, 'title' ) ) ) ) ); ?></td>
 					<td><?php echo (int) $r->ms; ?></td>
 					<td><?php echo esc_html( $r->status ); ?></td>
 				</tr>
