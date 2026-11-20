@@ -71,6 +71,7 @@ vanliga uppdateringar under **Tillägg** och **Kontrollpanel → Uppdateringar**
 
 ## Versioner
 
+- **1.7.2** – Uppdateringskollen frågar github.com först och GitHubs API bara som reserv och för releasetexten, så att gränsen på 60 API-anrop/timme på delade webbhotell inte stoppar uppdateringar. Fel visas bara när ingen version hittades. Rättat: när ingen version hittades frågades GitHub vid varje sidvisning i admin i stället för en gång i timmen.
 - **1.7.1** – Sökningar som startas med en exempelknapp markeras i sökhistoriken (`exempelknapp` i exporten, "(exempelknapp)" i admin), så att analysen kan skilja dem från kundernas egna frågor.
 - **1.7.0** – Export av sökhistoriken för analys: `GET /wp-json/cvai/v1/historik?fran=&till=&format=json|csv` med hemlig nyckel (visas och kan bytas i admin). E-post och telefonnummer maskeras, resornas namn följer med. Sökhistoriken rensas automatiskt efter 12 månader (inställbart). Varje sökning får ett anonymt besökar-id (kod av IP-adressen, byts varje månad; IP-adressen sparas inte), så att upprepade sökningar från samma besökare syns.
 - **1.6.2** – Kartan (`[resekarta]`) döljs automatiskt när kunden söker och visas igen om sökningen misslyckas. Annat kan döljas med CSS-klassen `cvai-dolj` i Avada eller shortcode-attributet `dolj`.
