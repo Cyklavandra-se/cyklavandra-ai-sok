@@ -25,6 +25,8 @@ här sökningen ska bli grunden till en ny förstasida.
     option `cvai_export_key` (`Authorization: Bearer` eller `X-Cvai-Key`). Maskerar e-post/telefon.
     Daglig cron `cvai_cleanup_log` rensar loggen efter `log_months` (standard 12).
     Kolumnen `visitor` = `cvai_visitor_id()` (HMAC av IP + månad med `wp_salt`), aldrig rå IP.
+    Sökningar från exempelknapparna skickar `exempel: true` och loggas med `kalla: exempelknapp` i tolkningen
+    (fältet `exempelknapp` i exporten).
   - Skydd: same-origin-kontroll, rate limit per IP/timme, dygnstak.
   - **Shortcode** `[cv_ai_sok]` (attribut: `platshallare`, `knapp`, `exempel="nej"`,
     `exempelfragor="a|b"`, `dolj="väljare"`). Element med klassen `cvai-dolj` döljs när kunden söker;
