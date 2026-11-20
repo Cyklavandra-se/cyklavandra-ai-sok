@@ -105,11 +105,12 @@
 			span.textContent = e;
 			b.appendChild(span);
 			b.title = e;
-			b.addEventListener('click', function () { q.value = e; run(); });
+			b.addEventListener('click', function () { q.value = e; run(true); });
 			chips.appendChild(b);
 		});
 
-		function run() {
+		// fromExample = sökningen startades med en exempelknapp (markeras i sökhistoriken).
+		function run(fromExample) {
 			var text = q.value.trim();
 			if (busy || text.length < 5) {
 				if (text.length < 5) status.innerHTML = '<span class="cvai-err">' + esc(t('err_short', 'Beskriv gärna lite mer vad ni söker.')) + '</span>';
@@ -130,7 +131,7 @@
 				method: 'POST',
 				credentials: 'same-origin',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ q: text, lang: data.lang || '' })
+				body: JSON.stringify({ q: text, lang: data.lang || '', exempel: fromExample === true })
 			})
 				.then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
 				.then(function (res) {

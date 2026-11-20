@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.7.0
+ * Version:     1.7.1
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.7.0' );
+define( 'CVAI_VERSION', '1.7.1' );
 define( 'CVAI_DB_VERSION', '3' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -859,6 +859,9 @@ function cvai_rest_search( WP_REST_Request $req ) {
 	}
 
 	$log_interp = $interp;
+	if ( rest_sanitize_boolean( $req->get_param( 'exempel' ) ) ) {
+		$log_interp['kalla'] = 'exempelknapp'; // startad med en exempelknapp, inte kundens egen text
+	}
 	if ( ! empty( $data['regler']['tillampade'] ) ) {
 		$log_interp['regler'] = sanitize_text_field( (string) $data['regler']['tillampade'] );
 	}
@@ -1036,6 +1039,7 @@ function cvai_rest_history( WP_REST_Request $req ) {
 			'tid'       => $row['created'],
 			'sprak'     => $row['lang'],
 			'besokare'  => (string) ( $row['visitor'] ?? '' ),
+			'exempelknapp' => is_array( $interp ) && 'exempelknapp' === ( $interp['kalla'] ?? '' ),
 			'fraga'     => cvai_mask_personal( $row['query'] ),
 			'status'    => $row['status'],
 			'traffar'   => array_map(
@@ -1053,7 +1057,7 @@ function cvai_rest_history( WP_REST_Request $req ) {
 
 	if ( 'csv' === strtolower( (string) $req->get_param( 'format' ) ) ) {
 		$fh = fopen( 'php://temp', 'w+' );
-		fputcsv( $fh, array( 'tid', 'sprak', 'besokare', 'fraga', 'status', 'traffar', 'tolkning', 'ms', 'tokens_in', 'tokens_ut' ) );
+		fputcsv( $fh, array( 'tid', 'sprak', 'besokare', 'exempelknapp', 'fraga', 'status', 'traffar', 'tolkning', 'ms', 'tokens_in', 'tokens_ut' ) );
 		foreach ( $out as $o ) {
 			$o['traffar']  = implode( ' | ', $o['traffar'] );
 			$o['tolkning'] = wp_json_encode( $o['tolkning'], JSON_UNESCAPED_UNICODE );
@@ -1501,7 +1505,7 @@ function cvai_admin_page() {
 					<td><?php echo esc_html( $r->created ); ?></td>
 					<td><?php echo esc_html( $rl ); ?></td>
 					<td><code><?php echo esc_html( $r->visitor ?? '' ); ?></code></td>
-					<td><?php echo esc_html( $r->query ); ?></td>
+					<td><?php echo esc_html( $r->query ); ?><?php echo is_array( $interp ) && 'exempelknapp' === ( $interp['kalla'] ?? '' ) ? ' <em style="color:#646970">(exempelknapp)</em>' : ''; ?></td>
 					<td><?php echo esc_html( is_array( $interp ) ? implode( ' · ', $interp ) : '' ); ?></td>
 					<td><?php echo esc_html( implode( ', ', $titles ) ); ?></td>
 					<td><?php echo (int) $r->ms; ?></td>
