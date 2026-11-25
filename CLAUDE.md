@@ -17,7 +17,9 @@ här sökningen ska bli grunden till en ny förstasida.
     inställningen `dest_parent` (standard `information/hitta-resa/destinationer`), id `D…`, i
     katalogens `dests`. AI:n lägger dem i fältet `destinationer` (max 2, mest specifika platsen);
     visas längst ner under "Läs mer om destinationen".
-  - **Svårighet** från taggar `hike1–4` / `bike1–4` (även WPML-slugs som `hike2-2`).
+  - **Svårighet** från taggar `hike1–4` / `bike1–4` (även WPML-slugs som `hike2-2`). Taggar på
+    översatta språk matchas också via sin svenska motsvarighet (`cvai_tag_source`, WPML `wpml_object_id`),
+    så nivå, land, aktivitet och guidad/självguidad fungerar även när termen fått ett annat namn.
   - **REST** `POST /wp-json/cvai/v1/search` `{q, lang}` → Anthropic Messages API med
     `tool_choice` på verktyget `visa_resor` (strukturerat svar). Katalogen ligger i
     systemprompten med `cache_control`.

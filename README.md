@@ -71,6 +71,7 @@ vanliga uppdateringar under **Tillägg** och **Kontrollpanel → Uppdateringar**
 
 ## Versioner
 
+- **1.9.0** – Taggar på översatta språk matchas nu via WPML-kopplingen till den svenska originaltaggen: nivå (`hike1–4`/`bike1–4`), land, aktivitet och guidad/självguidad känns igen även när taggen fått ett annat namn på språket (t.ex. `lett`, `syklus`, `veiledet`, finska landsnamn). Nya språk kräver därmed inga tillägg i ordlistan.
 - **1.8.1** – Sökningar från inloggad personal (redaktörer och admin) markeras som interna: "(intern)" i admin och `intern` i exporten, så att analysen kan hoppa över egna tester.
 - **1.8.0** – Sökresultatet sparas i fliken i 30 minuter, så att det finns kvar (med samma plats på sidan) när kunden går tillbaka från en resa. Klick på resor och destinationer registreras (vilken länk, del och plats i listan) och syns i admin och i exporten (`klick`).
 - **1.7.2** – Uppdateringskollen frågar github.com först och GitHubs API bara som reserv och för releasetexten, så att gränsen på 60 API-anrop/timme på delade webbhotell inte stoppar uppdateringar. Fel visas bara när ingen version hittades. Rättat: när ingen version hittades frågades GitHub vid varje sidvisning i admin i stället för en gång i timmen.

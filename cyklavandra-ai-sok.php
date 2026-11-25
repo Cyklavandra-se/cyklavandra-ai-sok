@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.8.1
+ * Version:     1.9.0
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.8.1' );
+define( 'CVAI_VERSION', '1.9.0' );
 define( 'CVAI_DB_VERSION', '4' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -206,6 +206,49 @@ function cvai_level_from_slug( $slug ) {
 	return null;
 }
 
+/**
+ * Taggens motsvarighet på huvudspråket (svenska) via WPML, som array( name, slug ).
+ * Läses direkt ur terms-tabellen så att WPML:s språkfilter inte byter tillbaka termen.
+ * Ger null utan WPML, när taggen redan är på huvudspråket eller saknar koppling.
+ */
+function cvai_tag_source( $term ) {
+	static $cache = array();
+	$id = (int) $term->term_id;
+	if ( array_key_exists( $id, $cache ) ) {
+		return $cache[ $id ];
+	}
+	$cache[ $id ] = null;
+	if ( ! cvai_has_wpml() ) {
+		return null;
+	}
+	$default = apply_filters( 'wpml_default_language', null );
+	if ( ! $default ) {
+		return null;
+	}
+	$src = (int) apply_filters( 'wpml_object_id', $id, 'post_tag', false, $default );
+	if ( $src && $src !== $id ) {
+		global $wpdb;
+		$row = $wpdb->get_row( $wpdb->prepare( "SELECT name, slug FROM {$wpdb->terms} WHERE term_id = %d", $src ) );
+		if ( $row ) {
+			$cache[ $id ] = array(
+				'name' => (string) $row->name,
+				'slug' => (string) $row->slug,
+			);
+		}
+	}
+	return $cache[ $id ];
+}
+
+/** Namnen att jämföra mot ordlistan: taggens eget namn + den svenska motsvarigheten. */
+function cvai_tag_names( $term ) {
+	$names = array( mb_strtolower( $term->name ) );
+	$src   = cvai_tag_source( $term );
+	if ( $src ) {
+		$names[] = mb_strtolower( $src['name'] );
+	}
+	return array_values( array_unique( $names ) );
+}
+
 /** Ord som betyder guidad / på egen hand / vandring / cykel / land på olika språk. */
 function cvai_vocab() {
 	return array(
@@ -302,23 +345,33 @@ function cvai_build_catalog( $lang ) {
 			$akt    = array();
 
 			foreach ( $tags as $t ) {
+				// Nivå: taggens egen slug, annars den svenska motsvarighetens (om WPML översatt namnet).
+				$src = cvai_tag_source( $t );
 				$lvl = cvai_level_from_slug( $t->slug );
+				if ( ! $lvl && $src ) {
+					$lvl = cvai_level_from_slug( $src['slug'] );
+				}
 				if ( $lvl ) {
 					$levels[] = cvai_level_label( $lvl['type'], $lvl['n'], $lang );
 					continue;
 				}
-				$lname = mb_strtolower( $t->name );
-				if ( in_array( $lname, $vocab['country'], true ) ) {
+				// Övriga taggar: matcha både taggens eget namn och det svenska originalets,
+				// så att nya språk fungerar utan att ordlistan behöver utökas.
+				$lnames = cvai_tag_names( $t );
+				$is     = function ( $list ) use ( $lnames ) {
+					return (bool) array_intersect( $lnames, $list );
+				};
+				if ( $is( $vocab['country'] ) ) {
 					$land[] = mb_convert_case( $t->name, MB_CASE_TITLE, 'UTF-8' );
 				}
-				if ( in_array( $lname, $vocab['guided'], true ) ) {
+				if ( $is( $vocab['guided'] ) ) {
 					$form = cvai_t( 'guided', $lang );
-				} elseif ( in_array( $lname, $vocab['self'], true ) ) {
+				} elseif ( $is( $vocab['self'] ) ) {
 					$form = cvai_t( 'self_guided', $lang );
 				}
-				if ( in_array( $lname, $vocab['hike'], true ) ) {
+				if ( $is( $vocab['hike'] ) ) {
 					$akt['hike'] = cvai_t( 'hiking', $lang );
-				} elseif ( in_array( $lname, $vocab['bike'], true ) ) {
+				} elseif ( $is( $vocab['bike'] ) ) {
 					$akt['bike'] = cvai_t( 'cycling', $lang );
 				}
 				$names[] = $t->name;
