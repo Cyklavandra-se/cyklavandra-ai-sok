@@ -56,7 +56,7 @@ jobs:
       - name: Bygg zip
         run: |
           mkdir -p build/cyklavandra-ai-sok
-          rsync -a --exclude '.git*' --exclude '.github' --exclude 'build' --exclude 'README.md' --exclude 'CLAUDE.md' ./ build/cyklavandra-ai-sok/
+          rsync -a --exclude '.git*' --exclude '.github' --exclude 'build' --exclude 'README.md' --exclude 'CLAUDE.md' --exclude 'tools' ./ build/cyklavandra-ai-sok/
           cd build && zip -r ../cyklavandra-ai-sok.zip cyklavandra-ai-sok
 
       - name: Skapa releasen om den saknas

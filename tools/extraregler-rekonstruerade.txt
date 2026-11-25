@@ -1,0 +1,8 @@
+Lyft gärna fram tågresor för kunder som vill undvika flyg.
+Om vin eller mat nämns, visa ALDRIG resor från Sverige, Norge och Danmark.
+Om kunden skriver höstlovet så menar dem vecka 44.
+
+Om kunden skriver aktivitet (vandring eller cykling) så har det högsta prioritet på utvalet av turer.
+Om kunden skriver in en destination (som ett land eller område) så har det prioritet över svårighetsgrad.
+Om kunden inte uttryckligen skriver att de vill ha en guidad resa (t.ex. "guidad", "med guide", "med reseledare" eller "i grupp"), visa högst en guidad resa totalt, bland både träffar och alternativ. Kommande guidade avgångar räknas också som guidade resor.
+Om kunden nämner gravel: visa bara resor med taggen gravel, och destinationssidan Gravel.
