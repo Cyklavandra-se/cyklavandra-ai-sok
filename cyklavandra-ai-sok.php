@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.10.0
+ * Version:     1.11.0
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.10.0' );
+define( 'CVAI_VERSION', '1.11.0' );
 define( 'CVAI_DB_VERSION', '4' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -83,6 +83,10 @@ function cvai_color_keys() {
 }
 
 function cvai_opt( $key ) {
+	// Tillfälliga värden för ett enskilt testanrop (jämförelsesidan) – påverkar inte kunderna.
+	if ( isset( $GLOBALS['cvai_override'] ) && array_key_exists( $key, $GLOBALS['cvai_override'] ) ) {
+		return $GLOBALS['cvai_override'][ $key ];
+	}
 	$opts = wp_parse_args( get_option( 'cvai_options', array() ), cvai_defaults() );
 	if ( 'api_key' === $key && defined( 'CVAI_API_KEY' ) && CVAI_API_KEY ) {
 		return CVAI_API_KEY;
@@ -916,6 +920,17 @@ add_action(
 		);
 		register_rest_route(
 			'cvai/v1',
+			'/jamfor',
+			array(
+				'methods'             => 'POST',
+				'callback'            => 'cvai_rest_compare',
+				'permission_callback' => function () {
+					return current_user_can( 'manage_options' );
+				},
+			)
+		);
+		register_rest_route(
+			'cvai/v1',
 			'/klick',
 			array(
 				'methods'             => 'POST',
@@ -976,23 +991,26 @@ function cvai_rest_search( WP_REST_Request $req ) {
 	if ( mb_strlen( $q ) > 600 ) {
 		$q = mb_substr( $q, 0, 600 );
 	}
-	if ( ! cvai_same_origin() ) {
+	$is_test = ! empty( $GLOBALS['cvai_override']['_test'] );
+	if ( ! $is_test && ! cvai_same_origin() ) {
 		return cvai_error( 'err_forbidden', $lang, 403 );
 	}
 
-	// Begränsning per besökare och per dag.
+	// Begränsning per besökare och per dag (gäller inte jämförelsesidan i admin).
 	$rl_key = 'cvai_rl_' . md5( cvai_client_ip() );
 	$count  = (int) get_transient( $rl_key );
-	if ( $count >= (int) cvai_opt( 'rate_per_hour' ) ) {
+	if ( ! $is_test && $count >= (int) cvai_opt( 'rate_per_hour' ) ) {
 		return cvai_error( 'err_rate', $lang, 429 );
 	}
 	$day_key = 'cvai_day_' . current_time( 'Ymd' );
 	$day     = (int) get_transient( $day_key );
-	if ( $day >= (int) cvai_opt( 'daily_cap' ) ) {
+	if ( ! $is_test && $day >= (int) cvai_opt( 'daily_cap' ) ) {
 		return cvai_error( 'err_cap', $lang, 503 );
 	}
-	set_transient( $rl_key, $count + 1, HOUR_IN_SECONDS );
-	set_transient( $day_key, $day + 1, 2 * DAY_IN_SECONDS );
+	if ( ! $is_test ) {
+		set_transient( $rl_key, $count + 1, HOUR_IN_SECONDS );
+		set_transient( $day_key, $day + 1, 2 * DAY_IN_SECONDS );
+	}
 
 	$api_key = cvai_opt( 'api_key' );
 	if ( ! $api_key ) {
@@ -1166,6 +1184,10 @@ function cvai_rest_search( WP_REST_Request $req ) {
 	}
 
 	$log_interp = $interp;
+	if ( $is_test ) {
+		$log_interp['kalla']  = 'jämförelse';
+		$log_interp['intern'] = 1;
+	}
 	$log_interp['katalog'] = $cat_info['mode'] . ', ' . $cat_info['trips'] . ' resor' . ( ! empty( $cat_info['filter'] ) ? ' (' . $cat_info['filter'] . ')' : '' );
 	$c_read  = (int) ( $usage['cache_read_input_tokens'] ?? 0 );
 	$c_write = (int) ( $usage['cache_creation_input_tokens'] ?? 0 );
@@ -1519,6 +1541,139 @@ function cvai_clicks_readable( $raw, $titles ) {
 		);
 	}
 	return $out;
+}
+
+/* -------------------------------------------------------------------------
+ * Jämför upplägg (admin): kör frågor med olika katalog/modell utan att ändra
+ * inställningarna för kunderna. Varje anrop är ett eget REST-anrop från sidan.
+ * ---------------------------------------------------------------------- */
+
+function cvai_compare_setups() {
+	return array(
+		'A' => array( 'namn' => 'Nuvarande: hela katalogen, Sonnet', 'catalog_mode' => 'full', 'prefilter' => 0, 'model' => 'claude-sonnet-5-5' ),
+		'B' => array( 'namn' => 'Bantad katalog, Sonnet', 'catalog_mode' => 'slim', 'prefilter' => 0, 'model' => 'claude-sonnet-5-5' ),
+		'C' => array( 'namn' => 'Bantad + förfilter, Sonnet', 'catalog_mode' => 'slim', 'prefilter' => 1, 'model' => 'claude-sonnet-5-5' ),
+		'D' => array( 'namn' => 'Bantad + förfilter, Haiku', 'catalog_mode' => 'slim', 'prefilter' => 1, 'model' => 'claude-haiku-5-5' ),
+		'E' => array( 'namn' => 'Bantad, Haiku', 'catalog_mode' => 'slim', 'prefilter' => 0, 'model' => 'claude-haiku-5-5' ),
+	);
+}
+
+/** POST /cvai/v1/jamfor {setup, q} – en sökning med ett upplägg. Loggas som intern jämförelse. */
+function cvai_rest_compare( WP_REST_Request $req ) {
+	$setups = cvai_compare_setups();
+	$id     = strtoupper( (string) $req->get_param( 'setup' ) );
+	$q      = (string) $req->get_param( 'q' );
+	if ( ! isset( $setups[ $id ] ) ) {
+		return new WP_REST_Response( array( 'error' => 'Okänt upplägg' ), 400 );
+	}
+	$GLOBALS['cvai_override'] = array(
+		'_test'        => 1,
+		'catalog_mode' => $setups[ $id ]['catalog_mode'],
+		'prefilter'    => $setups[ $id ]['prefilter'],
+		'model'        => $setups[ $id ]['model'],
+		'cache_ttl'    => 'off', // jämförbara siffror
+		'log_enabled'  => 1,
+	);
+	$inner = new WP_REST_Request( 'POST', '/cvai/v1/search' );
+	$inner->set_param( 'q', $q );
+	$inner->set_param( 'lang', cvai_default_lang() );
+	$t0  = microtime( true );
+	$res = cvai_rest_search( $inner );
+	$ms  = (int) round( ( microtime( true ) - $t0 ) * 1000 );
+	unset( $GLOBALS['cvai_override'] );
+
+	$d   = $res instanceof WP_REST_Response ? $res->get_data() : array();
+	$row = null;
+	if ( ! empty( $d['sok'] ) ) {
+		global $wpdb;
+		$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}cvai_log WHERE id = %d", (int) $d['sok'] ) );
+	}
+	$interp = $row ? json_decode( (string) $row->interpretation, true ) : array();
+	return new WP_REST_Response(
+		array(
+			'setup'     => $id,
+			'model'     => $setups[ $id ]['model'],
+			'status'    => $res instanceof WP_REST_Response ? $res->get_status() : 500,
+			'fel'       => (string) ( $d['error'] ?? '' ),
+			'bast'      => array_column( (array) ( $d['hits'] ?? array() ), 'title' ),
+			'alt'       => array_column( (array) ( $d['alternatives'] ?? array() ), 'title' ),
+			'dest'      => array_column( (array) ( $d['destinations'] ?? array() ), 'title' ),
+			'tokens_in' => $row ? (int) $row->tokens_in : 0,
+			'tokens_ut' => $row ? (int) $row->tokens_out : 0,
+			'ms'        => $ms,
+			'katalog'   => (string) ( $interp['katalog'] ?? '' ),
+			'regler'    => (string) ( $interp['regler'] ?? '' ),
+			'rattat'    => (string) ( $interp['korrigerade_id'] ?? '' ),
+		),
+		200
+	);
+}
+
+add_action(
+	'admin_menu',
+	function () {
+		add_submenu_page( Cyklavandra_Meny::SLUG, 'AI-sök – jämför upplägg', 'AI-sök: jämför', 'manage_options', 'cvai-jamfor', 'cvai_compare_page' );
+	},
+	20
+);
+
+function cvai_compare_page() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+	$default_q = "5 personer som vill till Frankrike och vandra, gärna längst kusten. Juni månad\nHej. 2 personer vana vandrare söker vandring med vin eller cykling vår eller höst 2027\n4 personer, sol och bad, långa vandringar minst 25 km per dag\nGravel cykel typ 70-80 km per dag, 4 pers, gärna Italien med mycket bra mat och vin. Typ mars eller april månad. 4-5 dagar.\nVi har rest med er tidigare, cykelresa på egen hand 2023 till Piemonte och 2024 till Toscana … Vi har tittat på Apulien.";
+	?>
+	<div class="wrap">
+		<h1>AI-sök – jämför upplägg</h1>
+		<p>Kör frågorna med olika katalog och modell, med sajtens riktiga extraregler. Kundernas sökningar påverkas inte. Varje fråga och upplägg är ett riktigt anrop till Claude och kostar pengar (uppskattning visas). Anropen loggas som interna jämförelser och hoppas över i veckoanalysen. Cachning är avstängd i testet.</p>
+		<p><label><strong>Frågor</strong> (en per rad)<br><textarea id="cvai-cq" class="large-text" rows="6"><?php echo esc_textarea( $default_q ); ?></textarea></label></p>
+		<p><strong>Upplägg:</strong>
+			<?php foreach ( cvai_compare_setups() as $k => $s ) : ?>
+				<label style="margin-right:14px"><input type="checkbox" class="cvai-cs" value="<?php echo esc_attr( $k ); ?>" <?php checked( 'E' !== $k ); ?>> <?php echo esc_html( $k . ' – ' . $s['namn'] ); ?></label>
+			<?php endforeach; ?>
+		</p>
+		<p><label>Varv: <select id="cvai-cr"><option>1</option><option>2</option><option>3</option></select></label>
+			<button class="button button-primary" id="cvai-cgo">Kör jämförelse</button> <span id="cvai-cstatus"></span></p>
+		<div id="cvai-cout"></div>
+		<p class="description">Kostnad räknas med Sonnet 5.5 $2/$10 och Haiku 5.5 $0,10/$0,50 per miljon tokens (in/ut), ca 10 kr per dollar, utan cachning.</p>
+	</div>
+	<style>#cvai-cout table{border-collapse:collapse;margin-top:10px;width:100%}#cvai-cout td,#cvai-cout th{border:1px solid #c3c4c7;padding:6px 8px;vertical-align:top;font-size:13px}#cvai-cout th{background:#f6f7f7;text-align:left}#cvai-cout .m{color:#646970;font-size:12px}#cvai-cout ol{margin:0 0 0 18px}</style>
+	<script>
+	(function(){
+		var url=<?php echo wp_json_encode( esc_url_raw( rest_url( 'cvai/v1/jamfor' ) ) ); ?>, nonce=<?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
+		var names=<?php echo wp_json_encode( wp_list_pluck( cvai_compare_setups(), 'namn' ) ); ?>;
+		var price={'claude-sonnet-5-5':[2,10],'claude-haiku-5-5':[0.1,0.5]};
+		function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+		function kr(r){var p=price[r.model]||[0,0];return (r.tokens_in*p[0]+r.tokens_ut*p[1])/1e6*10;}
+		document.getElementById('cvai-cgo').addEventListener('click',function(){
+			var qs=document.getElementById('cvai-cq').value.split('\n').map(function(s){return s.trim();}).filter(function(s){return s.length>4;});
+			var setups=[].slice.call(document.querySelectorAll('.cvai-cs:checked')).map(function(b){return b.value;});
+			var rounds=+document.getElementById('cvai-cr').value, jobs=[], res={}, btn=this, st=document.getElementById('cvai-cstatus');
+			for(var r=1;r<=rounds;r++) qs.forEach(function(q,i){setups.forEach(function(s){jobs.push({q:q,i:i,s:s,r:r});});});
+			btn.disabled=true; var done=0;
+			function draw(){
+				var h='<table><tr><th style="width:22%">Fråga</th>'+setups.map(function(s){return '<th>'+esc(s+' – '+names[s])+'</th>';}).join('')+'</tr>', sum={};
+				qs.forEach(function(q,i){h+='<tr><td>'+esc(q)+'</td>'+setups.map(function(s){var c='';for(var r=1;r<=rounds;r++){var x=res[i+s+r];if(!x){c+=r>1?'':'…';continue;}
+					sum[s]=sum[s]||{n:0,kr:0,ms:0,tin:0};sum[s].n++;sum[s].kr+=kr(x);sum[s].ms+=x.ms;sum[s].tin+=x.tokens_in;
+					c+=(rounds>1?'<div class="m">Varv '+r+'</div>':'')+(x.fel?'<b style="color:#b32d2e">'+esc(x.fel)+'</b>':'<ol>'+x.bast.map(function(t){return'<li>'+esc(t)+'</li>';}).join('')+'</ol>')+
+					(x.alt.length?'<div class="m">Alt: '+esc(x.alt.join(' · '))+'</div>':'')+(x.dest.length?'<div class="m">Dest: '+esc(x.dest.join(' · '))+'</div>':'')+
+					'<div class="m">'+x.tokens_in+' in / '+x.tokens_ut+' ut · '+(x.ms/1000).toFixed(1)+' s · '+kr(x).toFixed(2)+' kr<br>'+esc(x.katalog)+(x.rattat?'<br>Rättat: '+esc(x.rattat):'')+'</div>';}
+					return '<td>'+c+'</td>';}).join('')+'</tr>';});
+				h+='<tr><th>Snitt per sökning</th>'+setups.map(function(s){var m=sum[s];return '<th>'+(m?Math.round(m.tin/m.n)+' tokens in · '+(m.ms/m.n/1000).toFixed(1)+' s · '+(m.kr/m.n).toFixed(2)+' kr':'')+'</th>';}).join('')+'</tr></table>';
+				document.getElementById('cvai-cout').innerHTML=h;
+			}
+			function next(){
+				if(!jobs.length){btn.disabled=false;st.textContent='Klart.';return;}
+				var j=jobs.shift(); st.textContent='Kör '+(++done)+' av '+(done+jobs.length)+' …';
+				fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-WP-Nonce':nonce},body:JSON.stringify({setup:j.s,q:j.q})})
+					.then(function(r){return r.json();}).then(function(x){res[j.i+j.s+j.r]=x;}).catch(function(e){res[j.i+j.s+j.r]={fel:String(e),bast:[],alt:[],dest:[],tokens_in:0,tokens_ut:0,ms:0};})
+					.then(function(){draw();next();});
+			}
+			draw(); next();
+		});
+	})();
+	</script>
+	<?php
 }
 
 /* -------------------------------------------------------------------------
