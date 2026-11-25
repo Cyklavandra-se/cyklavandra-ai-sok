@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.9.0
+ * Version:     1.11.0
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.9.0' );
+define( 'CVAI_VERSION', '1.11.0' );
 define( 'CVAI_DB_VERSION', '4' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -45,6 +45,9 @@ function cvai_defaults() {
 		'trip_tags'      => 'guidad, självguidad',
 		'include_events' => 1,
 		'include_dests'  => 1,
+		'catalog_mode'   => 'full',  // full = hela texten per resa, slim = bantad faktarad
+		'prefilter'      => 0,       // sortera bort uppenbart fel aktivitet/land före anropet
+		'cache_ttl'      => '5m',    // off, 5m eller 1h (prompt-cachning hos Anthropic)
 		'dest_parent'    => 'information/hitta-resa/destinationer',
 		'rate_per_hour'  => 20,
 		'daily_cap'      => 500,
@@ -80,6 +83,10 @@ function cvai_color_keys() {
 }
 
 function cvai_opt( $key ) {
+	// Tillfälliga värden för ett enskilt testanrop (jämförelsesidan) – påverkar inte kunderna.
+	if ( isset( $GLOBALS['cvai_override'] ) && array_key_exists( $key, $GLOBALS['cvai_override'] ) ) {
+		return $GLOBALS['cvai_override'][ $key ];
+	}
 	$opts = wp_parse_args( get_option( 'cvai_options', array() ), cvai_defaults() );
 	if ( 'api_key' === $key && defined( 'CVAI_API_KEY' ) && CVAI_API_KEY ) {
 		return CVAI_API_KEY;
@@ -316,6 +323,7 @@ function cvai_get_catalog( $lang = null, $force = false ) {
 function cvai_build_catalog( $lang ) {
 	$cards   = array();
 	$lines   = array();
+	$items   = array();
 	$vocab   = cvai_vocab();
 	$tag_ids = cvai_trip_tag_ids( $lang );
 
@@ -398,6 +406,8 @@ function cvai_build_catalog( $lang ) {
 				'land'  => array_values( array_unique( array_map( 'mb_strtolower', $land ) ) ),
 			);
 
+			$items[ $key ] = cvai_slim_item( $key, $cards[ $key ]['title'], $names, $levels, $land, $akt, $form, cvai_clean_text( $raw, 2000 ) );
+
 			$lines[] = sprintf(
 				'%s | %s | Taggar: %s | Nivå: %s | Text: %s',
 				$key,
@@ -411,6 +421,7 @@ function cvai_build_catalog( $lang ) {
 
 	// Kommande guidade avgångar från The Events Calendar.
 	$event_lines = array();
+	$event_slim  = array();
 	if ( cvai_opt( 'include_events' ) && function_exists( 'tribe_get_events' ) ) {
 		$events = tribe_get_events(
 			array(
@@ -444,12 +455,14 @@ function cvai_build_catalog( $lang ) {
 				$end,
 				cvai_clean_text( $e->post_content, 300 )
 			);
+			$event_slim[] = sprintf( '%s | %s | %s–%s | %s', $key, $cards[ $key ]['title'], $start, $end, cvai_clean_text( $e->post_content, 90 ) );
 		}
 	}
 
 	// Destinationssidor: undersidor (i alla nivåer) till sidan Destinationer.
 	$dests      = array();
 	$dest_lines = array();
+	$dest_slim  = array();
 	if ( cvai_opt( 'include_dests' ) ) {
 		foreach ( cvai_destination_pages( $lang ) as $d ) {
 			$key   = 'D' . $d['post']->ID;
@@ -470,6 +483,7 @@ function cvai_build_catalog( $lang ) {
 			$raw                   = has_excerpt( $d['post'] ) ? $d['post']->post_excerpt . ' ' . $d['post']->post_content : $d['post']->post_content;
 			$dests[ $key ]['text'] = cvai_clean_text( $raw, 170 );
 			$dest_lines[]          = sprintf( '%s | %s | %s | %s', $key, $title, $d['parent'] ? $d['parent'] : '-', cvai_clean_text( $raw, 300 ) );
+			$dest_slim[]           = sprintf( '%s | %s%s', $key, $title, $d['parent'] ? ' (' . $d['parent'] . ')' : '' );
 		}
 	}
 
@@ -488,6 +502,11 @@ function cvai_build_catalog( $lang ) {
 		'count'  => count( $lines ),
 		'events' => count( $event_lines ),
 		'dests'  => $dests,
+		'items'  => $items,
+		'slim'   => array(
+			'events' => $event_slim,
+			'dests'  => $dest_slim,
+		),
 		'built'  => current_time( 'mysql' ),
 	);
 }
@@ -543,6 +562,228 @@ function cvai_destination_pages( $lang ) {
 		$depth++;
 	}
 	return $out;
+}
+
+/* -------------------------------------------------------------------------
+ * Bantad katalog + förfiltrering (för lägre kostnad per sökning)
+ * ---------------------------------------------------------------------- */
+
+/** Svenska månader i ordning, för att korta månadstaggar till intervall. */
+function cvai_month_order() {
+	return array( 'januari', 'februari', 'mars', 'april', 'maj', 'juni', 'juli', 'augusti', 'september', 'oktober', 'november', 'december' );
+}
+
+/** "maj, juni, juli, september" → "maj–jul, sep". */
+function cvai_compress_months( $months ) {
+	$order = cvai_month_order();
+	$idx   = array();
+	foreach ( $months as $m ) {
+		$i = array_search( $m, $order, true );
+		if ( false !== $i ) {
+			$idx[] = $i;
+		}
+	}
+	sort( $idx );
+	$idx = array_values( array_unique( $idx ) );
+	if ( count( $idx ) === 12 ) {
+		return 'året runt';
+	}
+	$out = array();
+	$n   = count( $idx );
+	for ( $i = 0; $i < $n; $i++ ) {
+		$a = $idx[ $i ];
+		while ( $i + 1 < $n && $idx[ $i + 1 ] === $idx[ $i ] + 1 ) {
+			$i++;
+		}
+		$b     = $idx[ $i ];
+		$short = function ( $k ) use ( $order ) {
+			return mb_substr( $order[ $k ], 0, 3 );
+		};
+		$out[] = $a === $b ? $short( $a ) : $short( $a ) . '–' . $short( $b );
+	}
+	return implode( ', ', $out );
+}
+
+/**
+ * En resa i kort form: bara det som behövs för att välja resa, plus data för förfiltreringen.
+ * Faktarutan på resesidorna (Typ av resa, Längd, Dagsetapper, Boende, Säsong, Pris) läses ut;
+ * den allmänna texten om svårighetsgrad (samma på alla resor) och långa beskrivningar hoppas över.
+ */
+function cvai_slim_item( $key, $title, $tag_names, $levels, $land, $akt, $form, $text ) {
+	$f   = array();
+	$pat = array(
+		'langd'   => '/Längd\s+(\d+\s*dagar)/u',
+		'route'   => '/Start\s*[–-]\s*slut\s+(.+?)\s+Svårighetsgrad/u',
+		'etapper' => '/Dagsetapper\s+(.+?)\s+Boende/u',
+		'boende'  => '/Boende\s+(.+?)\s+Säsong/u',
+		'sasong'  => '/Säsong\s+(.+?)\s+Pris från/u',
+		'pris'    => '/Pris från\s+([\d\s.,]+\s*(?:€|kr|SEK|EUR))/u',
+	);
+	foreach ( $pat as $k => $re ) {
+		if ( preg_match( $re, $text, $m ) ) {
+			$f[ $k ] = trim( mb_substr( $m[1], 0, 90 ) );
+		}
+	}
+	// Beskrivning: efter faktarutan ("Boka resan") om den finns, annars textens början.
+	$desc = $text;
+	$pos  = mb_strpos( $text, 'Boka resan' );
+	if ( false !== $pos && isset( $f['langd'] ) ) {
+		$desc = mb_substr( $text, $pos + 10 );
+	}
+	$limit = isset( $f['langd'] ) ? 160 : 260;
+	$desc  = trim( $desc );
+	if ( mb_strlen( $desc ) > $limit ) {
+		$desc = preg_replace( '/\s+\S*$/u', '', mb_substr( $desc, 0, $limit ) ) . '…';
+	}
+
+	$order  = cvai_month_order();
+	$months = array();
+	$other  = array();
+	$vocab  = cvai_vocab();
+	$skip   = array_merge( $vocab['guided'], $vocab['self'], $vocab['hike'], $vocab['bike'] );
+	foreach ( $tag_names as $n ) {
+		$l = mb_strtolower( $n );
+		if ( in_array( $l, $order, true ) ) {
+			$months[] = $l;
+		} elseif ( ! in_array( $l, $skip, true ) && ! in_array( $l, $vocab['country'], true ) && ! preg_match( '/^\d{4}$/', $l ) ) {
+			$other[] = $n;
+		}
+	}
+
+	$parts = array( $key, $title );
+	if ( $land ) {
+		$parts[] = implode( '/', $land );
+	}
+	$parts[] = implode( ' & ', $akt ) . ( $form ? ', ' . mb_strtolower( $form ) : '' );
+	if ( $levels ) {
+		$parts[] = implode( ', ', $levels );
+	}
+	foreach ( array( 'langd', 'route', 'etapper', 'boende', 'sasong', 'pris' ) as $k ) {
+		if ( isset( $f[ $k ] ) ) {
+			$parts[] = ( 'pris' === $k ? 'från ' : ( 'sasong' === $k ? 'säsong ' : '' ) ) . $f[ $k ];
+		}
+	}
+	if ( $months ) {
+		$parts[] = 'månader: ' . cvai_compress_months( $months );
+	}
+	if ( $other ) {
+		$parts[] = 'taggar: ' . implode( ', ', $other );
+	}
+	if ( '' !== $desc ) {
+		$parts[] = $desc;
+	}
+
+	$all_tags = array_map( 'mb_strtolower', $tag_names );
+	return array(
+		'line'  => implode( ' | ', array_filter( $parts, 'strlen' ) ),
+		'land'  => array_values( array_unique( array_map( 'mb_strtolower', $land ) ) ),
+		'hike'  => isset( $akt['hike'] ),
+		'bike'  => isset( $akt['bike'] ),
+		'tags'  => $all_tags,
+		'title' => mb_strtolower( $title ),
+	);
+}
+
+/** Regioner som inte är taggar, kopplade till land (för förfiltreringen). */
+function cvai_region_countries() {
+	return array(
+		'toscana' => 'italien', 'piemonte' => 'italien', 'apulien' => 'italien', 'puglia' => 'italien', 'sicilien' => 'italien',
+		'sardinien' => 'italien', 'dolomiterna' => 'italien', 'sydtyrolen' => 'italien', 'amalfi' => 'italien', 'cinque terre' => 'italien',
+		'umbrien' => 'italien', 'ligurien' => 'italien', 'veneto' => 'italien', 'capri' => 'italien', 'gardasjön' => 'italien',
+		'provence' => 'frankrike', 'bretagne' => 'frankrike', 'normandie' => 'frankrike', 'alsace' => 'frankrike', 'bourgogne' => 'frankrike',
+		'loire' => 'frankrike', 'korsika' => 'frankrike', 'dordogne' => 'frankrike',
+		'andalusien' => 'spanien', 'baskien' => 'spanien', 'rioja' => 'spanien', 'katalonien' => 'spanien', 'galicien' => 'spanien',
+		'teneriffa' => 'spanien', 'gran canaria' => 'spanien', 'la gomera' => 'spanien', 'lanzarote' => 'spanien', 'la palma' => 'spanien',
+		'madeira' => 'portugal', 'azorerna' => 'portugal', 'algarve' => 'portugal', 'kreta' => 'grekland', 'tyrolen' => 'österrike',
+		'bayern' => 'tyskland', 'schwarzwald' => 'tyskland', 'skåne' => 'sverige', 'gotland' => 'sverige',
+	);
+}
+
+/**
+ * Sorterar bort resor som uppenbart inte passar: fel aktivitet, och fel land när ett land
+ * eller en känd region nämns. Månader används inte (taggarna är ofullständiga). Blir det för
+ * få kvar släpps landsfiltret. Gravel nämnt: bara resor med taggen gravel.
+ *
+ * @return array{ids: string[], why: string}
+ */
+function cvai_prefilter( $items, $q ) {
+	$ql   = ' ' . mb_strtolower( $q ) . ' ';
+	$ids  = array_keys( $items );
+	$why  = array();
+	$hike = (bool) preg_match( '/vandr|fottur|vandre|hiking|\bhike|walking|wander|vaell|randonn/u', $ql );
+	$bike = (bool) preg_match( '/cykl|cykel|sykl|sykk|\bbike|cycl|radfahr|fiets|pyöräi|vélo|gravel/u', $ql );
+
+	if ( false !== mb_strpos( $ql, 'gravel' ) ) {
+		$g = array_filter( $ids, function ( $id ) use ( $items ) {
+			return in_array( 'gravel', $items[ $id ]['tags'], true );
+		} );
+		if ( $g ) {
+			return array( 'ids' => array_values( $g ), 'why' => 'gravel' );
+		}
+	}
+
+	if ( $hike xor $bike ) {
+		$ids   = array_values( array_filter( $ids, function ( $id ) use ( $items, $hike ) {
+			$i = $items[ $id ];
+			return ( $hike ? $i['hike'] : $i['bike'] ) || ( ! $i['hike'] && ! $i['bike'] );
+		} ) );
+		$why[] = $hike ? 'vandring' : 'cykel';
+	}
+
+	// Land: landsnamn (alla språk), regiontaggar och kända regioner.
+	$countries = array();
+	foreach ( cvai_vocab()['country'] as $c ) {
+		if ( preg_match( '/(?<![\p{L}])' . preg_quote( $c, '/' ) . '(?![\p{L}])/u', $ql ) ) {
+			$countries = array_merge( $countries, cvai_country_variants( $c ) );
+		}
+	}
+	foreach ( cvai_region_countries() as $reg => $c ) {
+		if ( false !== mb_strpos( $ql, $reg ) ) {
+			$countries = array_merge( $countries, cvai_country_variants( $c ) );
+		}
+	}
+	$countries = array_unique( $countries );
+	if ( $countries ) {
+		$in = array_values( array_filter( $ids, function ( $id ) use ( $items, $countries ) {
+			$i = $items[ $id ];
+			return array_intersect( $i['land'], $countries ) || array_intersect( $i['tags'], $countries );
+		} ) );
+		if ( count( $in ) >= 5 ) {
+			$ids   = $in;
+			$why[] = 'land: ' . implode( '/', array_slice( $countries, 0, 3 ) );
+		} else {
+			$why[] = 'för få i landet – landsfilter släppt';
+		}
+	}
+	return array( 'ids' => $ids, 'why' => implode( ', ', $why ) );
+}
+
+/** Katalogtext för ett anrop: hela (nuvarande) eller bantad, med eller utan förfiltrering. */
+function cvai_catalog_text_for( $catalog, $q, &$info = null ) {
+	$info = array( 'mode' => 'full', 'trips' => (int) $catalog['count'] );
+	if ( 'slim' !== cvai_opt( 'catalog_mode' ) || empty( $catalog['items'] ) ) {
+		return $catalog['text'];
+	}
+	$ids = array_keys( $catalog['items'] );
+	$why = '';
+	if ( cvai_opt( 'prefilter' ) ) {
+		$pf  = cvai_prefilter( $catalog['items'], $q );
+		$ids = $pf['ids'];
+		$why = $pf['why'];
+	}
+	$lines = array();
+	foreach ( $ids as $id ) {
+		$lines[] = $catalog['items'][ $id ]['line'];
+	}
+	$text = "RESOR (id | namn | land | aktivitet, form | nivå | längd | start–slut | dagsetapper | boende | säsong | pris | månader | taggar | kort beskrivning):\n" . implode( "\n", $lines );
+	if ( ! empty( $catalog['slim']['events'] ) ) {
+		$text .= "\n\nKOMMANDE GUIDADE AVGÅNGAR MED DATUM (id | namn | datum | beskrivning):\n" . implode( "\n", $catalog['slim']['events'] );
+	}
+	if ( ! empty( $catalog['slim']['dests'] ) ) {
+		$text .= "\n\nDESTINATIONSSIDOR – inga resor, bara till fältet destinationer (id | namn):\n" . implode( "\n", $catalog['slim']['dests'] );
+	}
+	$info = array( 'mode' => 'slim', 'trips' => count( $ids ), 'filter' => $why );
+	return $text;
 }
 
 /** Rensar Avada/Fusion-shortcodes och HTML till ren text. */
@@ -679,6 +920,17 @@ add_action(
 		);
 		register_rest_route(
 			'cvai/v1',
+			'/jamfor',
+			array(
+				'methods'             => 'POST',
+				'callback'            => 'cvai_rest_compare',
+				'permission_callback' => function () {
+					return current_user_can( 'manage_options' );
+				},
+			)
+		);
+		register_rest_route(
+			'cvai/v1',
 			'/klick',
 			array(
 				'methods'             => 'POST',
@@ -739,23 +991,26 @@ function cvai_rest_search( WP_REST_Request $req ) {
 	if ( mb_strlen( $q ) > 600 ) {
 		$q = mb_substr( $q, 0, 600 );
 	}
-	if ( ! cvai_same_origin() ) {
+	$is_test = ! empty( $GLOBALS['cvai_override']['_test'] );
+	if ( ! $is_test && ! cvai_same_origin() ) {
 		return cvai_error( 'err_forbidden', $lang, 403 );
 	}
 
-	// Begränsning per besökare och per dag.
+	// Begränsning per besökare och per dag (gäller inte jämförelsesidan i admin).
 	$rl_key = 'cvai_rl_' . md5( cvai_client_ip() );
 	$count  = (int) get_transient( $rl_key );
-	if ( $count >= (int) cvai_opt( 'rate_per_hour' ) ) {
+	if ( ! $is_test && $count >= (int) cvai_opt( 'rate_per_hour' ) ) {
 		return cvai_error( 'err_rate', $lang, 429 );
 	}
 	$day_key = 'cvai_day_' . current_time( 'Ymd' );
 	$day     = (int) get_transient( $day_key );
-	if ( $day >= (int) cvai_opt( 'daily_cap' ) ) {
+	if ( ! $is_test && $day >= (int) cvai_opt( 'daily_cap' ) ) {
 		return cvai_error( 'err_cap', $lang, 503 );
 	}
-	set_transient( $rl_key, $count + 1, HOUR_IN_SECONDS );
-	set_transient( $day_key, $day + 1, 2 * DAY_IN_SECONDS );
+	if ( ! $is_test ) {
+		set_transient( $rl_key, $count + 1, HOUR_IN_SECONDS );
+		set_transient( $day_key, $day + 1, 2 * DAY_IN_SECONDS );
+	}
 
 	$api_key = cvai_opt( 'api_key' );
 	if ( ! $api_key ) {
@@ -773,9 +1028,8 @@ function cvai_rest_search( WP_REST_Request $req ) {
 		'tool_choice' => array( 'type' => 'auto' ),
 		'system'      => array(
 			array(
-				'type'          => 'text',
-				'text'          => cvai_system_prompt( $catalog['text'] ),
-				'cache_control' => array( 'type' => 'ephemeral' ),
+				'type' => 'text',
+				'text' => cvai_system_prompt( cvai_catalog_text_for( $catalog, $q, $cat_info ) ),
 			),
 		),
 		'messages'    => array(
@@ -785,6 +1039,14 @@ function cvai_rest_search( WP_REST_Request $req ) {
 			),
 		),
 	);
+
+	// Prompt-cachning: lönar sig bara när nästa sökning kommer inom cachetiden.
+	$ttl = (string) cvai_opt( 'cache_ttl' );
+	if ( '5m' === $ttl ) {
+		$body['system'][0]['cache_control'] = array( 'type' => 'ephemeral' );
+	} elseif ( '1h' === $ttl ) {
+		$body['system'][0]['cache_control'] = array( 'type' => 'ephemeral', 'ttl' => '1h' );
+	}
 
 	// Låg ansträngning = snabbare svar. Stöds av generation 5-modellerna.
 	if ( preg_match( '/^claude-(opus|sonnet|haiku|fable|mythos)-5/', (string) $body['model'] ) ) {
@@ -922,6 +1184,16 @@ function cvai_rest_search( WP_REST_Request $req ) {
 	}
 
 	$log_interp = $interp;
+	if ( $is_test ) {
+		$log_interp['kalla']  = 'jämförelse';
+		$log_interp['intern'] = 1;
+	}
+	$log_interp['katalog'] = $cat_info['mode'] . ', ' . $cat_info['trips'] . ' resor' . ( ! empty( $cat_info['filter'] ) ? ' (' . $cat_info['filter'] . ')' : '' );
+	$c_read  = (int) ( $usage['cache_read_input_tokens'] ?? 0 );
+	$c_write = (int) ( $usage['cache_creation_input_tokens'] ?? 0 );
+	if ( $c_read || $c_write ) {
+		$log_interp['cache'] = 'läst ' . $c_read . ', skrivet ' . $c_write;
+	}
 	if ( rest_sanitize_boolean( $req->get_param( 'exempel' ) ) ) {
 		$log_interp['kalla'] = 'exempelknapp'; // startad med en exempelknapp, inte kundens egen text
 	}
@@ -1272,6 +1544,139 @@ function cvai_clicks_readable( $raw, $titles ) {
 }
 
 /* -------------------------------------------------------------------------
+ * Jämför upplägg (admin): kör frågor med olika katalog/modell utan att ändra
+ * inställningarna för kunderna. Varje anrop är ett eget REST-anrop från sidan.
+ * ---------------------------------------------------------------------- */
+
+function cvai_compare_setups() {
+	return array(
+		'A' => array( 'namn' => 'Nuvarande: hela katalogen, Sonnet', 'catalog_mode' => 'full', 'prefilter' => 0, 'model' => 'claude-sonnet-5-5' ),
+		'B' => array( 'namn' => 'Bantad katalog, Sonnet', 'catalog_mode' => 'slim', 'prefilter' => 0, 'model' => 'claude-sonnet-5-5' ),
+		'C' => array( 'namn' => 'Bantad + förfilter, Sonnet', 'catalog_mode' => 'slim', 'prefilter' => 1, 'model' => 'claude-sonnet-5-5' ),
+		'D' => array( 'namn' => 'Bantad + förfilter, Haiku', 'catalog_mode' => 'slim', 'prefilter' => 1, 'model' => 'claude-haiku-5-5' ),
+		'E' => array( 'namn' => 'Bantad, Haiku', 'catalog_mode' => 'slim', 'prefilter' => 0, 'model' => 'claude-haiku-5-5' ),
+	);
+}
+
+/** POST /cvai/v1/jamfor {setup, q} – en sökning med ett upplägg. Loggas som intern jämförelse. */
+function cvai_rest_compare( WP_REST_Request $req ) {
+	$setups = cvai_compare_setups();
+	$id     = strtoupper( (string) $req->get_param( 'setup' ) );
+	$q      = (string) $req->get_param( 'q' );
+	if ( ! isset( $setups[ $id ] ) ) {
+		return new WP_REST_Response( array( 'error' => 'Okänt upplägg' ), 400 );
+	}
+	$GLOBALS['cvai_override'] = array(
+		'_test'        => 1,
+		'catalog_mode' => $setups[ $id ]['catalog_mode'],
+		'prefilter'    => $setups[ $id ]['prefilter'],
+		'model'        => $setups[ $id ]['model'],
+		'cache_ttl'    => 'off', // jämförbara siffror
+		'log_enabled'  => 1,
+	);
+	$inner = new WP_REST_Request( 'POST', '/cvai/v1/search' );
+	$inner->set_param( 'q', $q );
+	$inner->set_param( 'lang', cvai_default_lang() );
+	$t0  = microtime( true );
+	$res = cvai_rest_search( $inner );
+	$ms  = (int) round( ( microtime( true ) - $t0 ) * 1000 );
+	unset( $GLOBALS['cvai_override'] );
+
+	$d   = $res instanceof WP_REST_Response ? $res->get_data() : array();
+	$row = null;
+	if ( ! empty( $d['sok'] ) ) {
+		global $wpdb;
+		$row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}cvai_log WHERE id = %d", (int) $d['sok'] ) );
+	}
+	$interp = $row ? json_decode( (string) $row->interpretation, true ) : array();
+	return new WP_REST_Response(
+		array(
+			'setup'     => $id,
+			'model'     => $setups[ $id ]['model'],
+			'status'    => $res instanceof WP_REST_Response ? $res->get_status() : 500,
+			'fel'       => (string) ( $d['error'] ?? '' ),
+			'bast'      => array_column( (array) ( $d['hits'] ?? array() ), 'title' ),
+			'alt'       => array_column( (array) ( $d['alternatives'] ?? array() ), 'title' ),
+			'dest'      => array_column( (array) ( $d['destinations'] ?? array() ), 'title' ),
+			'tokens_in' => $row ? (int) $row->tokens_in : 0,
+			'tokens_ut' => $row ? (int) $row->tokens_out : 0,
+			'ms'        => $ms,
+			'katalog'   => (string) ( $interp['katalog'] ?? '' ),
+			'regler'    => (string) ( $interp['regler'] ?? '' ),
+			'rattat'    => (string) ( $interp['korrigerade_id'] ?? '' ),
+		),
+		200
+	);
+}
+
+add_action(
+	'admin_menu',
+	function () {
+		add_submenu_page( Cyklavandra_Meny::SLUG, 'AI-sök – jämför upplägg', 'AI-sök: jämför', 'manage_options', 'cvai-jamfor', 'cvai_compare_page' );
+	},
+	20
+);
+
+function cvai_compare_page() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+	$default_q = "5 personer som vill till Frankrike och vandra, gärna längst kusten. Juni månad\nHej. 2 personer vana vandrare söker vandring med vin eller cykling vår eller höst 2027\n4 personer, sol och bad, långa vandringar minst 25 km per dag\nGravel cykel typ 70-80 km per dag, 4 pers, gärna Italien med mycket bra mat och vin. Typ mars eller april månad. 4-5 dagar.\nVi har rest med er tidigare, cykelresa på egen hand 2023 till Piemonte och 2024 till Toscana … Vi har tittat på Apulien.";
+	?>
+	<div class="wrap">
+		<h1>AI-sök – jämför upplägg</h1>
+		<p>Kör frågorna med olika katalog och modell, med sajtens riktiga extraregler. Kundernas sökningar påverkas inte. Varje fråga och upplägg är ett riktigt anrop till Claude och kostar pengar (uppskattning visas). Anropen loggas som interna jämförelser och hoppas över i veckoanalysen. Cachning är avstängd i testet.</p>
+		<p><label><strong>Frågor</strong> (en per rad)<br><textarea id="cvai-cq" class="large-text" rows="6"><?php echo esc_textarea( $default_q ); ?></textarea></label></p>
+		<p><strong>Upplägg:</strong>
+			<?php foreach ( cvai_compare_setups() as $k => $s ) : ?>
+				<label style="margin-right:14px"><input type="checkbox" class="cvai-cs" value="<?php echo esc_attr( $k ); ?>" <?php checked( 'E' !== $k ); ?>> <?php echo esc_html( $k . ' – ' . $s['namn'] ); ?></label>
+			<?php endforeach; ?>
+		</p>
+		<p><label>Varv: <select id="cvai-cr"><option>1</option><option>2</option><option>3</option></select></label>
+			<button class="button button-primary" id="cvai-cgo">Kör jämförelse</button> <span id="cvai-cstatus"></span></p>
+		<div id="cvai-cout"></div>
+		<p class="description">Kostnad räknas med Sonnet 5.5 $2/$10 och Haiku 5.5 $0,10/$0,50 per miljon tokens (in/ut), ca 10 kr per dollar, utan cachning.</p>
+	</div>
+	<style>#cvai-cout table{border-collapse:collapse;margin-top:10px;width:100%}#cvai-cout td,#cvai-cout th{border:1px solid #c3c4c7;padding:6px 8px;vertical-align:top;font-size:13px}#cvai-cout th{background:#f6f7f7;text-align:left}#cvai-cout .m{color:#646970;font-size:12px}#cvai-cout ol{margin:0 0 0 18px}</style>
+	<script>
+	(function(){
+		var url=<?php echo wp_json_encode( esc_url_raw( rest_url( 'cvai/v1/jamfor' ) ) ); ?>, nonce=<?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
+		var names=<?php echo wp_json_encode( wp_list_pluck( cvai_compare_setups(), 'namn' ) ); ?>;
+		var price={'claude-sonnet-5-5':[2,10],'claude-haiku-5-5':[0.1,0.5]};
+		function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+		function kr(r){var p=price[r.model]||[0,0];return (r.tokens_in*p[0]+r.tokens_ut*p[1])/1e6*10;}
+		document.getElementById('cvai-cgo').addEventListener('click',function(){
+			var qs=document.getElementById('cvai-cq').value.split('\n').map(function(s){return s.trim();}).filter(function(s){return s.length>4;});
+			var setups=[].slice.call(document.querySelectorAll('.cvai-cs:checked')).map(function(b){return b.value;});
+			var rounds=+document.getElementById('cvai-cr').value, jobs=[], res={}, btn=this, st=document.getElementById('cvai-cstatus');
+			for(var r=1;r<=rounds;r++) qs.forEach(function(q,i){setups.forEach(function(s){jobs.push({q:q,i:i,s:s,r:r});});});
+			btn.disabled=true; var done=0;
+			function draw(){
+				var h='<table><tr><th style="width:22%">Fråga</th>'+setups.map(function(s){return '<th>'+esc(s+' – '+names[s])+'</th>';}).join('')+'</tr>', sum={};
+				qs.forEach(function(q,i){h+='<tr><td>'+esc(q)+'</td>'+setups.map(function(s){var c='';for(var r=1;r<=rounds;r++){var x=res[i+s+r];if(!x){c+=r>1?'':'…';continue;}
+					sum[s]=sum[s]||{n:0,kr:0,ms:0,tin:0};sum[s].n++;sum[s].kr+=kr(x);sum[s].ms+=x.ms;sum[s].tin+=x.tokens_in;
+					c+=(rounds>1?'<div class="m">Varv '+r+'</div>':'')+(x.fel?'<b style="color:#b32d2e">'+esc(x.fel)+'</b>':'<ol>'+x.bast.map(function(t){return'<li>'+esc(t)+'</li>';}).join('')+'</ol>')+
+					(x.alt.length?'<div class="m">Alt: '+esc(x.alt.join(' · '))+'</div>':'')+(x.dest.length?'<div class="m">Dest: '+esc(x.dest.join(' · '))+'</div>':'')+
+					'<div class="m">'+x.tokens_in+' in / '+x.tokens_ut+' ut · '+(x.ms/1000).toFixed(1)+' s · '+kr(x).toFixed(2)+' kr<br>'+esc(x.katalog)+(x.rattat?'<br>Rättat: '+esc(x.rattat):'')+'</div>';}
+					return '<td>'+c+'</td>';}).join('')+'</tr>';});
+				h+='<tr><th>Snitt per sökning</th>'+setups.map(function(s){var m=sum[s];return '<th>'+(m?Math.round(m.tin/m.n)+' tokens in · '+(m.ms/m.n/1000).toFixed(1)+' s · '+(m.kr/m.n).toFixed(2)+' kr':'')+'</th>';}).join('')+'</tr></table>';
+				document.getElementById('cvai-cout').innerHTML=h;
+			}
+			function next(){
+				if(!jobs.length){btn.disabled=false;st.textContent='Klart.';return;}
+				var j=jobs.shift(); st.textContent='Kör '+(++done)+' av '+(done+jobs.length)+' …';
+				fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-WP-Nonce':nonce},body:JSON.stringify({setup:j.s,q:j.q})})
+					.then(function(r){return r.json();}).then(function(x){res[j.i+j.s+j.r]=x;}).catch(function(e){res[j.i+j.s+j.r]={fel:String(e),bast:[],alt:[],dest:[],tokens_in:0,tokens_ut:0,ms:0};})
+					.then(function(){draw();next();});
+			}
+			draw(); next();
+		});
+	})();
+	</script>
+	<?php
+}
+
+/* -------------------------------------------------------------------------
  * Shortcode
  * ---------------------------------------------------------------------- */
 
@@ -1461,6 +1866,9 @@ function cvai_sanitize_options( $in ) {
 	$out['trip_tags']      = sanitize_text_field( $in['trip_tags'] ?? $old['trip_tags'] );
 	$out['include_events'] = empty( $in['include_events'] ) ? 0 : 1;
 	$out['include_dests']  = empty( $in['include_dests'] ) ? 0 : 1;
+	$out['catalog_mode']   = in_array( $in['catalog_mode'] ?? '', array( 'full', 'slim' ), true ) ? $in['catalog_mode'] : 'full';
+	$out['prefilter']      = empty( $in['prefilter'] ) ? 0 : 1;
+	$out['cache_ttl']      = in_array( $in['cache_ttl'] ?? '', array( 'off', '5m', '1h' ), true ) ? $in['cache_ttl'] : '5m';
 	$out['dest_parent']    = trim( preg_replace( '#[^\p{L}\p{N}/_-]+#u', '', (string) ( $in['dest_parent'] ?? $old['dest_parent'] ?? '' ) ), '/' );
 	$out['log_enabled']    = empty( $in['log_enabled'] ) ? 0 : 1;
 	$out['log_months']     = max( 0, min( 120, (int) ( $in['log_months'] ?? 12 ) ) );
@@ -1567,6 +1975,18 @@ function cvai_admin_page() {
 				<tr><th>Guidade avgångar</th><td><label><input type="checkbox" name="cvai_options[include_events]" value="1" <?php checked( $o['include_events'] ); ?>> Ta med kommande evenemang från The Events Calendar</label></td></tr>
 				<tr><th>Destinationssidor</th><td><label><input type="checkbox" name="cvai_options[include_dests]" value="1" <?php checked( $o['include_dests'] ); ?>> Visa destinationssidor längst ner när kunden nämner en plats</label><br>
 					<input class="regular-text" name="cvai_options[dest_parent]" value="<?php echo esc_attr( $o['dest_parent'] ); ?>"><p class="description">Sökväg till sidan vars undersidor är destinationer, på huvudspråket (t.ex. <code>information/hitta-resa/destinationer</code>). Översättningarna hittas via WPML.</p></td></tr>
+				<tr><th>Katalog till AI:n</th><td>
+					<select name="cvai_options[catalog_mode]">
+						<option value="full" <?php selected( $o['catalog_mode'], 'full' ); ?>>Hela texten per resa (som tidigare)</option>
+						<option value="slim" <?php selected( $o['catalog_mode'], 'slim' ); ?>>Bantad: faktarad + kort beskrivning (ca hälften så många tokens)</option>
+					</select><br>
+					<label><input type="checkbox" name="cvai_options[prefilter]" value="1" <?php checked( $o['prefilter'] ); ?>> Förfiltrera: skicka bara resor med rätt aktivitet och land (gäller bantad katalog; gravel = bara resor med taggen gravel)</label><br>
+					Prompt-cachning: <select name="cvai_options[cache_ttl]">
+						<option value="off" <?php selected( $o['cache_ttl'], 'off' ); ?>>Av</option>
+						<option value="5m" <?php selected( $o['cache_ttl'], '5m' ); ?>>5 minuter</option>
+						<option value="1h" <?php selected( $o['cache_ttl'], '1h' ); ?>>1 timme</option>
+					</select>
+					<p class="description">Cachning lönar sig bara om nästa sökning kommer inom cachetiden; annars kostar första anropet 25 % (5 min) eller 100 % (1 timme) extra.</p></td></tr>
 				<tr><th>Max sökningar per besökare/timme</th><td><input type="number" min="1" name="cvai_options[rate_per_hour]" value="<?php echo (int) $o['rate_per_hour']; ?>"></td></tr>
 				<tr><th>Max sökningar per dygn (totalt)</th><td><input type="number" min="1" name="cvai_options[daily_cap]" value="<?php echo (int) $o['daily_cap']; ?>"><p class="description">Kostnadsspärr för alla språk tillsammans.</p></td></tr>
 				<tr><th>Exempelfrågor</th><td>

@@ -71,6 +71,8 @@ vanliga uppdateringar under **Tillägg** och **Kontrollpanel → Uppdateringar**
 
 ## Versioner
 
+- **1.11.0** – Ny adminsida **Cykla&Vandra → AI-sök: jämför**: kör frågor med olika upplägg (hela/bantad katalog, förfilter, Sonnet/Haiku) med sajtens nyckel och extraregler, och visar förslag, tokens, svarstid och kostnad sida vid sida. Påverkar inte kunderna; anropen loggas som interna jämförelser.
+- **1.10.0** – Lägre kostnad per sökning (av som standard, slås på i inställningarna): bantad katalog (faktarad + kort beskrivning, ca hälften så många tokens), förfiltrering på aktivitet, land/region och gravel, och val av prompt-cachning (av / 5 min / 1 timme). Loggen visar katalogens storlek och cachade tokens. Testverktyg i `tools/`.
 - **1.9.0** – Taggar på översatta språk matchas nu via WPML-kopplingen till den svenska originaltaggen: nivå (`hike1–4`/`bike1–4`), land, aktivitet och guidad/självguidad känns igen även när taggen fått ett annat namn på språket (t.ex. `lett`, `syklus`, `veiledet`, finska landsnamn). Nya språk kräver därmed inga tillägg i ordlistan.
 - **1.8.1** – Sökningar från inloggad personal (redaktörer och admin) markeras som interna: "(intern)" i admin och `intern` i exporten, så att analysen kan hoppa över egna tester.
 - **1.8.0** – Sökresultatet sparas i fliken i 30 minuter, så att det finns kvar (med samma plats på sidan) när kunden går tillbaka från en resa. Klick på resor och destinationer registreras (vilken länk, del och plats i listan) och syns i admin och i exporten (`klick`).

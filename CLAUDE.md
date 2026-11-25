@@ -17,6 +17,13 @@ här sökningen ska bli grunden till en ny förstasida.
     inställningen `dest_parent` (standard `information/hitta-resa/destinationer`), id `D…`, i
     katalogens `dests`. AI:n lägger dem i fältet `destinationer` (max 2, mest specifika platsen);
     visas längst ner under "Läs mer om destinationen".
+  - **Kostnad**: inställningarna `catalog_mode` (`full`/`slim`), `prefilter` och `cache_ttl` (`off`/`5m`/`1h`).
+    `slim` = `cvai_slim_item()` (faktarutan Längd/Dagsetapper/Boende/Säsong/Pris + 160 tecken beskrivning),
+    `cvai_prefilter()` = aktivitet, land/region (`cvai_region_countries()`), gravel – aldrig månad (taggarna är
+    ofullständiga). Loggen får `katalog` och `cache` i tolkningen. Jämför upplägg med `tools/jamfor-upplagg.php`
+    (lokal WordPress, se `tools/README.md`) – aldrig på sajten.
+    På sajten: adminsidan `admin.php?page=cvai-jamfor` (`cvai_compare_page`, REST `cvai/v1/jamfor`) kör
+    upplägg A–E via `$GLOBALS['cvai_override']` (bara det anropet), loggas med `kalla: jämförelse`, `intern: 1`.
   - **Svårighet** från taggar `hike1–4` / `bike1–4` (även WPML-slugs som `hike2-2`). Taggar på
     översatta språk matchas också via sin svenska motsvarighet (`cvai_tag_source`, WPML `wpml_object_id`),
     så nivå, land, aktivitet och guidad/självguidad fungerar även när termen fått ett annat namn.
