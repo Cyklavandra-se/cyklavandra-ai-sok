@@ -22,7 +22,7 @@ här sökningen ska bli grunden till en ny förstasida.
     `cvai_prefilter()` = aktivitet, land/region (`cvai_region_countries()`), gravel – aldrig månad (taggarna är
     ofullständiga). Loggen får `katalog` och `cache` i tolkningen. Jämför upplägg med `tools/jamfor-upplagg.php`
     (lokal WordPress, se `tools/README.md`) – aldrig på sajten.
-    På sajten: adminsidan `admin.php?page=cvai-jamfor` (`cvai_compare_page`, REST `cvai/v1/jamfor`) kör
+    På sajten: fliken Jämför upplägg `admin.php?page=cvai&tab=jamfor` (`cvai_compare_page`; gamla `page=cvai-jamfor` omdirigeras, REST `cvai/v1/jamfor`) kör
     upplägg A–E via `$GLOBALS['cvai_override']` (bara det anropet), loggas med `kalla: jämförelse`, `intern: 1`.
   - **Svårighet** från taggar `hike1–4` / `bike1–4` (även WPML-slugs som `hike2-2`). Taggar på
     översatta språk matchas också via sin svenska motsvarighet (`cvai_tag_source`, WPML `wpml_object_id`),
@@ -48,7 +48,7 @@ här sökningen ska bli grunden till en ny förstasida.
   - **Shortcode** `[cv_ai_sok]` (attribut: `platshallare`, `knapp`, `exempel="nej"`,
     `exempelfragor="a|b"`, `dolj="väljare"`). Element med klassen `cvai-dolj` döljs när kunden söker;
     utdata från kortkoden `[resekarta]` får klassen automatiskt (filtret `do_shortcode_tag`). Pär skriver rubrik/ingress själv i Avada – lägg aldrig till det i pluginen.
-  - **Admin**: Cykla&Vandra → AI-sök (API-nyckel, modell, taggar, antal träffar, färger,
+  - **Admin**: Cykla&Vandra → AI-sök med flikarna Sökningar (standard), Inställningar (`tab=installningar`) och Jämför upplägg (`tab=jamfor`) (API-nyckel, modell, taggar, antal träffar, färger,
     exempelfrågor per språk, sökhistorik, katalogförhandsvisning per språk).
 - `cyklavandra-meny.php` – gemensam adminmeny Cykla&Vandra (klass `Cyklavandra_Meny`), kopierad
   **oförändrad** från repot `Cyklavandra-se/bokningsformular`. Ändra den aldrig här; ändras den där,

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.13.0
+ * Version:     1.14.0
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.13.0' );
+define( 'CVAI_VERSION', '1.14.0' );
 define( 'CVAI_DB_VERSION', '4' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -1660,22 +1660,14 @@ function cvai_rest_compare( WP_REST_Request $req ) {
 	);
 }
 
-add_action(
-	'admin_menu',
-	function () {
-		add_submenu_page( Cyklavandra_Meny::SLUG, 'AI-sök – jämför upplägg', 'AI-sök: jämför', 'manage_options', 'cvai-jamfor', 'cvai_compare_page' );
-	},
-	20
-);
-
+/** Fliken "Jämför upplägg" på adminsidan AI-sök. */
 function cvai_compare_page() {
 	if ( ! current_user_can( 'manage_options' ) ) {
 		return;
 	}
 	$default_q = "5 personer som vill till Frankrike och vandra, gärna längst kusten. Juni månad\nHej. 2 personer vana vandrare söker vandring med vin eller cykling vår eller höst 2027\n4 personer, sol och bad, långa vandringar minst 25 km per dag\nGravel cykel typ 70-80 km per dag, 4 pers, gärna Italien med mycket bra mat och vin. Typ mars eller april månad. 4-5 dagar.\nVi har rest med er tidigare, cykelresa på egen hand 2023 till Piemonte och 2024 till Toscana … Vi har tittat på Apulien.";
 	?>
-	<div class="wrap">
-		<h1>AI-sök – jämför upplägg</h1>
+	<div class="cvai-jamfor">
 		<p>Kör frågorna med olika katalog och modell, med sajtens riktiga extraregler. Kundernas sökningar påverkas inte. Varje fråga och upplägg är ett riktigt anrop till Claude och kostar pengar (uppskattning visas). Anropen loggas som interna jämförelser och hoppas över i veckoanalysen. Cachning är avstängd i testet.</p>
 		<p><label><strong>Frågor</strong> (en per rad)<br><textarea id="cvai-cq" class="large-text" rows="6"><?php echo esc_textarea( $default_q ); ?></textarea></label></p>
 		<p><strong>Upplägg:</strong>
@@ -1686,16 +1678,16 @@ function cvai_compare_page() {
 		<p><label>Varv: <select id="cvai-cr"><option>1</option><option>2</option><option>3</option></select></label>
 			<button class="button button-primary" id="cvai-cgo">Kör jämförelse</button> <span id="cvai-cstatus"></span></p>
 		<div id="cvai-cout"></div>
-		<p class="description">Kostnad räknas med Sonnet 5.5 $2/$10 och Haiku 5.5 $0,10/$0,50 per miljon tokens (in/ut), ca 10 kr per dollar, utan cachning.</p>
+		<p class="description">Kostnad räknas med Sonnet 5.5 $2/$10 och Haiku 5.5 $0,10/$0,50 per miljon tokens (in/ut), <?php echo esc_html( number_format_i18n( (float) cvai_opt( 'kr_per_usd' ), 2 ) ); ?> kr per dollar (inställning på fliken Inställningar), utan cachning.</p>
 	</div>
 	<style>#cvai-cout table{border-collapse:collapse;margin-top:10px;width:100%}#cvai-cout td,#cvai-cout th{border:1px solid #c3c4c7;padding:6px 8px;vertical-align:top;font-size:13px}#cvai-cout th{background:#f6f7f7;text-align:left}#cvai-cout .m{color:#646970;font-size:12px}#cvai-cout ol{margin:0 0 0 18px}</style>
 	<script>
 	(function(){
 		var url=<?php echo wp_json_encode( esc_url_raw( rest_url( 'cvai/v1/jamfor' ) ) ); ?>, nonce=<?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
 		var names=<?php echo wp_json_encode( wp_list_pluck( cvai_compare_setups(), 'namn' ) ); ?>;
-		var price={'claude-sonnet-5-5':[2,10],'claude-haiku-5-5':[0.1,0.5]};
+		var price={'claude-sonnet-5-5':[2,10],'claude-haiku-5-5':[0.1,0.5]}, kurs=<?php echo wp_json_encode( (float) cvai_opt( 'kr_per_usd' ) ); ?>;
 		function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
-		function kr(r){var p=price[r.model]||[0,0];return (r.tokens_in*p[0]+r.tokens_ut*p[1])/1e6*10;}
+		function kr(r){var p=price[r.model]||[0,0];return (r.tokens_in*p[0]+r.tokens_ut*p[1])/1e6*kurs;}
 		document.getElementById('cvai-cgo').addEventListener('click',function(){
 			var qs=document.getElementById('cvai-cq').value.split('\n').map(function(s){return s.trim();}).filter(function(s){return s.length>4;});
 			var setups=[].slice.call(document.querySelectorAll('.cvai-cs:checked')).map(function(b){return b.value;});
@@ -1878,6 +1870,11 @@ add_action(
 			wp_safe_redirect( admin_url( 'admin.php?page=cvai' ) );
 			exit;
 		}
+		// Jämförelsen var en egen sida i menyn före 1.14.0, nu en flik.
+		if ( 'admin.php' === $pagenow && isset( $_GET['page'] ) && 'cvai-jamfor' === $_GET['page'] ) { // phpcs:ignore WordPress.Security.NonceVerification
+			wp_safe_redirect( admin_url( 'admin.php?page=cvai&tab=jamfor' ) );
+			exit;
+		}
 	},
 	999
 );
@@ -1970,7 +1967,10 @@ function cvai_admin_page() {
 		$preview_lang = key( $langs );
 	}
 
-	$tab      = isset( $_GET['tab'] ) && 'sokningar' === $_GET['tab'] ? 'sokningar' : 'installningar';
+	$tab      = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'sokningar';
+	if ( ! in_array( $tab, array( 'sokningar', 'installningar', 'jamfor' ), true ) ) {
+		$tab = 'sokningar';
+	}
 	$o        = wp_parse_args( get_option( 'cvai_options', array() ), cvai_defaults() );
 	$has_key  = (bool) cvai_opt( 'api_key' );
 	$from_cfg = defined( 'CVAI_API_KEY' ) && CVAI_API_KEY;
@@ -1978,18 +1978,23 @@ function cvai_admin_page() {
 	$rows     = 'sokningar' === $tab ? $wpdb->get_results( "SELECT * FROM $table ORDER BY id DESC LIMIT 200" ) : array(); // phpcs:ignore
 	$today    = (int) get_transient( 'cvai_day_' . current_time( 'Ymd' ) );
 	$catalogs = array();
-	foreach ( array_keys( $langs ) as $l ) {
-		$catalogs[ $l ] = cvai_get_catalog( $l );
+	if ( 'jamfor' !== $tab ) {
+		foreach ( array_keys( $langs ) as $l ) {
+			$catalogs[ $l ] = cvai_get_catalog( $l );
+		}
 	}
 	?>
 	<div class="wrap">
 		<h1>AI-sök</h1>
 		<?php settings_errors(); // "Inställningarna sparades" visas inte automatiskt utanför menyn Inställningar. ?>
 		<nav class="nav-tab-wrapper" style="margin-bottom:12px">
-			<a class="nav-tab <?php echo 'installningar' === $tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( admin_url( 'admin.php?page=cvai' ) ); ?>">Inställningar</a>
-			<a class="nav-tab <?php echo 'sokningar' === $tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( admin_url( 'admin.php?page=cvai&tab=sokningar' ) ); ?>">Sökningar</a>
+			<?php foreach ( array( 'sokningar' => 'Sökningar', 'installningar' => 'Inställningar', 'jamfor' => 'Jämför upplägg' ) as $t => $namn ) : ?>
+				<a class="nav-tab <?php echo $t === $tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( admin_url( 'sokningar' === $t ? 'admin.php?page=cvai' : 'admin.php?page=cvai&tab=' . $t ) ); ?>"><?php echo esc_html( $namn ); ?></a>
+			<?php endforeach; ?>
 		</nav>
-		<?php if ( 'installningar' === $tab ) : ?>
+		<?php if ( 'jamfor' === $tab ) : ?>
+			<?php cvai_compare_page(); ?>
+		<?php elseif ( 'installningar' === $tab ) : ?>
 		<p>Lägg shortcoden <code>[cv_ai_sok]</code> på startsidan i varje språk (t.ex. i ett Avada Text Block). Rubrik och ingress skriver du själv ovanför. Sökrutan, knappar och resultat visas automatiskt på sidans språk.</p>
 		<p>Valfria attribut: <code>platshallare="…"</code>, <code>knapp="…"</code>, <code>exempel="nej"</code>, <code>exempelfragor="Fråga 1|Fråga 2|Fråga 3"</code> (egna exempel för just den sidan – praktiskt per språk).</p>
 
