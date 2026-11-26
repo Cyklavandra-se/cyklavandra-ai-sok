@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.12.0
+ * Version:     1.13.0
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.12.0' );
+define( 'CVAI_VERSION', '1.13.0' );
 define( 'CVAI_DB_VERSION', '4' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -1970,11 +1970,12 @@ function cvai_admin_page() {
 		$preview_lang = key( $langs );
 	}
 
+	$tab      = isset( $_GET['tab'] ) && 'sokningar' === $_GET['tab'] ? 'sokningar' : 'installningar';
 	$o        = wp_parse_args( get_option( 'cvai_options', array() ), cvai_defaults() );
 	$has_key  = (bool) cvai_opt( 'api_key' );
 	$from_cfg = defined( 'CVAI_API_KEY' ) && CVAI_API_KEY;
 	$table    = $wpdb->prefix . 'cvai_log';
-	$rows     = $wpdb->get_results( "SELECT * FROM $table ORDER BY id DESC LIMIT 200" ); // phpcs:ignore
+	$rows     = 'sokningar' === $tab ? $wpdb->get_results( "SELECT * FROM $table ORDER BY id DESC LIMIT 200" ) : array(); // phpcs:ignore
 	$today    = (int) get_transient( 'cvai_day_' . current_time( 'Ymd' ) );
 	$catalogs = array();
 	foreach ( array_keys( $langs ) as $l ) {
@@ -1984,6 +1985,11 @@ function cvai_admin_page() {
 	<div class="wrap">
 		<h1>AI-sök</h1>
 		<?php settings_errors(); // "Inställningarna sparades" visas inte automatiskt utanför menyn Inställningar. ?>
+		<nav class="nav-tab-wrapper" style="margin-bottom:12px">
+			<a class="nav-tab <?php echo 'installningar' === $tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( admin_url( 'admin.php?page=cvai' ) ); ?>">Inställningar</a>
+			<a class="nav-tab <?php echo 'sokningar' === $tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( admin_url( 'admin.php?page=cvai&tab=sokningar' ) ); ?>">Sökningar</a>
+		</nav>
+		<?php if ( 'installningar' === $tab ) : ?>
 		<p>Lägg shortcoden <code>[cv_ai_sok]</code> på startsidan i varje språk (t.ex. i ett Avada Text Block). Rubrik och ingress skriver du själv ovanför. Sökrutan, knappar och resultat visas automatiskt på sidans språk.</p>
 		<p>Valfria attribut: <code>platshallare="…"</code>, <code>knapp="…"</code>, <code>exempel="nej"</code>, <code>exempelfragor="Fråga 1|Fråga 2|Fråga 3"</code> (egna exempel för just den sidan – praktiskt per språk).</p>
 
@@ -2077,6 +2083,7 @@ function cvai_admin_page() {
 			</table>
 			<?php submit_button(); ?>
 		</form>
+		<?php else : ?>
 
 		<h2>Export för analys</h2>
 		<p>Sökhistoriken kan hämtas som JSON eller CSV, t.ex. av en schemalagd uppgift. E-postadresser och telefonnummer i frågorna maskeras.</p>
@@ -2129,7 +2136,7 @@ function cvai_admin_page() {
 				<tfoot><tr><th colspan="8" style="text-align:right">Summa för de <?php echo count( $rows ); ?> sökningarna ovan</th><th style="white-space:nowrap"><?php echo esc_html( number_format_i18n( $kr_sum, 2 ) ); ?> kr</th><th></th></tr></tfoot>
 			<?php endif; ?>
 		</table>
-		<p class="description">Kostnaden räknas med Anthropics listpriser och <?php echo esc_html( number_format_i18n( (float) cvai_opt( 'kr_per_usd' ), 2 ) ); ?> kr per dollar (ändras under Sökhistorik ovan). Sökningar från före version 1.12.0 är uppskattade utan cachning.</p>
+		<p class="description">Kostnaden räknas med Anthropics listpriser och <?php echo esc_html( number_format_i18n( (float) cvai_opt( 'kr_per_usd' ), 2 ) ); ?> kr per dollar (ändras under Sökhistorik på fliken Inställningar). Sökningar från före version 1.12.0 är uppskattade utan cachning.</p>
 
 		<h2>Förhandsgranska katalogen</h2>
 		<p>Så här ser resedatan ut som AI:n får läsa. Saknas nivå eller månad här, saknas den också för sökningen.</p>
@@ -2139,6 +2146,7 @@ function cvai_admin_page() {
 		<?php endforeach; ?>
 		</p>
 		<textarea class="large-text code" rows="14" readonly><?php echo esc_textarea( mb_substr( $catalogs[ $preview_lang ]['text'], 0, 30000 ) ); ?></textarea>
+		<?php endif; ?>
 	</div>
 	<?php
 }
