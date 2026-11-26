@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Cykla & Vandra – AI-sök
  * Description: Fritextsökning med AI som matchar kundens önskemål mot taggade resor. Stöder WPML (en katalog per språk). Använd shortcoden [cv_ai_sok] på valfri sida.
- * Version:     1.11.0
+ * Version:     1.13.0
  * Author:      Cykla & Vandra
  * Text Domain: cvai
  * Requires PHP: 7.4
@@ -25,7 +25,7 @@ if ( defined( 'CVAI_VERSION' ) ) {
 	return;
 }
 
-define( 'CVAI_VERSION', '1.11.0' );
+define( 'CVAI_VERSION', '1.13.0' );
 define( 'CVAI_DB_VERSION', '4' );
 define( 'CVAI_FILE', __FILE__ );
 define( 'CVAI_URL', plugin_dir_url( __FILE__ ) );
@@ -55,6 +55,7 @@ function cvai_defaults() {
 		'extra_rules'    => '',
 		'log_enabled'    => 1,
 		'log_months'     => 12,
+		'kr_per_usd'     => 10,      // växelkurs för kostnaden i sökhistoriken
 		'examples_by_lang' => array(),
 		'max_hits'       => 4,
 		'max_alts'       => 2,
@@ -1194,6 +1195,11 @@ function cvai_rest_search( WP_REST_Request $req ) {
 	if ( $c_read || $c_write ) {
 		$log_interp['cache'] = 'läst ' . $c_read . ', skrivet ' . $c_write;
 	}
+	$log_interp['modell'] = (string) $body['model'];
+	$usd = cvai_cost_usd( $body['model'], $usage, $ttl );
+	if ( null !== $usd ) {
+		$log_interp['usd'] = round( $usd, 6 );
+	}
 	if ( rest_sanitize_boolean( $req->get_param( 'exempel' ) ) ) {
 		$log_interp['kalla'] = 'exempelknapp'; // startad med en exempelknapp, inte kundens egen text
 	}
@@ -1394,12 +1400,13 @@ function cvai_rest_history( WP_REST_Request $req ) {
 			'ms'        => (int) $row['ms'],
 			'tokens_in' => (int) $row['tokens_in'],
 			'tokens_ut' => (int) $row['tokens_out'],
+			'kostnad_usd' => is_array( $interp ) && isset( $interp['usd'] ) ? (float) $interp['usd'] : null,
 		);
 	}
 
 	if ( 'csv' === strtolower( (string) $req->get_param( 'format' ) ) ) {
 		$fh = fopen( 'php://temp', 'w+' );
-		fputcsv( $fh, array( 'tid', 'sprak', 'besokare', 'exempelknapp', 'intern', 'fraga', 'status', 'klick', 'traffar', 'tolkning', 'ms', 'tokens_in', 'tokens_ut' ) );
+		fputcsv( $fh, array( 'tid', 'sprak', 'besokare', 'exempelknapp', 'intern', 'fraga', 'status', 'klick', 'traffar', 'tolkning', 'ms', 'tokens_in', 'tokens_ut', 'kostnad_usd' ) );
 		foreach ( $out as $o ) {
 			$o['traffar']  = implode( ' | ', $o['traffar'] );
 			$o['klick']    = implode( ' | ', array_map( function ( $k ) { return $k['namn'] . ' (' . $k['del'] . ' ' . $k['plats'] . ')'; }, $o['klick'] ) );
@@ -1470,6 +1477,50 @@ function cvai_visitor_id() {
 function cvai_is_internal_request() {
 	$uid = (int) wp_validate_auth_cookie( '', 'logged_in' );
 	return $uid > 0 && user_can( $uid, 'edit_posts' );
+}
+
+/**
+ * Pris i dollar per miljon tokens: in, ut, läst från cachen. Skrivning till cachen kostar
+ * 1,25 × in (5 minuter) eller 2 × in (1 timme). Okänd modell = null.
+ */
+function cvai_model_price( $model ) {
+	$prices = array(
+		'claude-sonnet-5-5' => array( 2, 10, 0.10 ),
+		'claude-sonnet-5'   => array( 2, 10, 0.20 ),
+		'claude-haiku-5-5'  => array( 0.10, 0.50, 0.01 ),
+		'claude-opus-5-5'   => array( 4, 20, 0.20 ),
+		'claude-opus-5'     => array( 5, 25, 0.50 ),
+		'claude-fable-5-2'  => array( 8, 40, 0.20 ),
+	);
+	$prices = apply_filters( 'cvai_model_prices', $prices );
+	return $prices[ (string) $model ] ?? null;
+}
+
+/** Vad ett anrop kostade i dollar, utifrån usage-svaret från Anthropic. */
+function cvai_cost_usd( $model, $usage, $ttl = '5m' ) {
+	$p = cvai_model_price( $model );
+	if ( ! $p ) {
+		return null;
+	}
+	$in    = (int) ( $usage['input_tokens'] ?? 0 );
+	$read  = (int) ( $usage['cache_read_input_tokens'] ?? 0 );
+	$write = (int) ( $usage['cache_creation_input_tokens'] ?? 0 );
+	$out   = (int) ( $usage['output_tokens'] ?? 0 );
+	return ( $in * $p[0] + $read * $p[2] + $write * $p[0] * ( '1h' === $ttl ? 2 : 1.25 ) + $out * $p[1] ) / 1e6;
+}
+
+/** Kostnad för en rad i sökhistoriken i kronor. Äldre rader utan sparad kostnad uppskattas (exakt = false). */
+function cvai_row_cost_kr( $row, $interp ) {
+	$kurs = (float) cvai_opt( 'kr_per_usd' );
+	if ( is_array( $interp ) && isset( $interp['usd'] ) ) {
+		return array( (float) $interp['usd'] * $kurs, true );
+	}
+	if ( ! (int) $row->tokens_in && ! (int) $row->tokens_out ) {
+		return array( null, true );
+	}
+	$model = is_array( $interp ) && ! empty( $interp['modell'] ) ? $interp['modell'] : cvai_opt( 'model' );
+	$usd   = cvai_cost_usd( $model, array( 'input_tokens' => (int) $row->tokens_in, 'output_tokens' => (int) $row->tokens_out ) );
+	return array( null === $usd ? null : $usd * $kurs, false );
 }
 
 /** Sparar sökningen och returnerar dess id (0 om sökhistoriken är avstängd). */
@@ -1872,6 +1923,7 @@ function cvai_sanitize_options( $in ) {
 	$out['dest_parent']    = trim( preg_replace( '#[^\p{L}\p{N}/_-]+#u', '', (string) ( $in['dest_parent'] ?? $old['dest_parent'] ?? '' ) ), '/' );
 	$out['log_enabled']    = empty( $in['log_enabled'] ) ? 0 : 1;
 	$out['log_months']     = max( 0, min( 120, (int) ( $in['log_months'] ?? 12 ) ) );
+	$out['kr_per_usd']     = max( 0.01, min( 1000, (float) str_replace( ',', '.', (string) ( $in['kr_per_usd'] ?? $old['kr_per_usd'] ) ) ) );
 	$out['rate_per_hour']  = max( 1, (int) ( $in['rate_per_hour'] ?? 20 ) );
 	$out['daily_cap']      = max( 1, (int) ( $in['daily_cap'] ?? 500 ) );
 	$out['examples']       = sanitize_textarea_field( $in['examples'] ?? '' );
@@ -1918,11 +1970,12 @@ function cvai_admin_page() {
 		$preview_lang = key( $langs );
 	}
 
+	$tab      = isset( $_GET['tab'] ) && 'sokningar' === $_GET['tab'] ? 'sokningar' : 'installningar';
 	$o        = wp_parse_args( get_option( 'cvai_options', array() ), cvai_defaults() );
 	$has_key  = (bool) cvai_opt( 'api_key' );
 	$from_cfg = defined( 'CVAI_API_KEY' ) && CVAI_API_KEY;
 	$table    = $wpdb->prefix . 'cvai_log';
-	$rows     = $wpdb->get_results( "SELECT * FROM $table ORDER BY id DESC LIMIT 200" ); // phpcs:ignore
+	$rows     = 'sokningar' === $tab ? $wpdb->get_results( "SELECT * FROM $table ORDER BY id DESC LIMIT 200" ) : array(); // phpcs:ignore
 	$today    = (int) get_transient( 'cvai_day_' . current_time( 'Ymd' ) );
 	$catalogs = array();
 	foreach ( array_keys( $langs ) as $l ) {
@@ -1932,6 +1985,11 @@ function cvai_admin_page() {
 	<div class="wrap">
 		<h1>AI-sök</h1>
 		<?php settings_errors(); // "Inställningarna sparades" visas inte automatiskt utanför menyn Inställningar. ?>
+		<nav class="nav-tab-wrapper" style="margin-bottom:12px">
+			<a class="nav-tab <?php echo 'installningar' === $tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( admin_url( 'admin.php?page=cvai' ) ); ?>">Inställningar</a>
+			<a class="nav-tab <?php echo 'sokningar' === $tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( admin_url( 'admin.php?page=cvai&tab=sokningar' ) ); ?>">Sökningar</a>
+		</nav>
+		<?php if ( 'installningar' === $tab ) : ?>
 		<p>Lägg shortcoden <code>[cv_ai_sok]</code> på startsidan i varje språk (t.ex. i ett Avada Text Block). Rubrik och ingress skriver du själv ovanför. Sökrutan, knappar och resultat visas automatiskt på sidans språk.</p>
 		<p>Valfria attribut: <code>platshallare="…"</code>, <code>knapp="…"</code>, <code>exempel="nej"</code>, <code>exempelfragor="Fråga 1|Fråga 2|Fråga 3"</code> (egna exempel för just den sidan – praktiskt per språk).</p>
 
@@ -2002,7 +2060,8 @@ function cvai_admin_page() {
 				</td></tr>
 				<tr><th>Extra regler till AI:n</th><td><textarea class="large-text" rows="4" name="cvai_options[extra_rules]"><?php echo esc_textarea( $o['extra_rules'] ); ?></textarea><p class="description">Gäller alla språk. T.ex. "Lyft gärna fram tågresor för kunder som vill undvika flyg."</p></td></tr>
 				<tr><th>Sökhistorik</th><td><label><input type="checkbox" name="cvai_options[log_enabled]" value="1" <?php checked( $o['log_enabled'] ); ?>> Spara sökningar (utan IP-adress)</label><br>
-					Rensa sökningar äldre än <input type="number" min="0" max="120" style="width:5em" name="cvai_options[log_months]" value="<?php echo (int) $o['log_months']; ?>"> månader <span class="description">(0 = spara för alltid)</span></td></tr>
+					Rensa sökningar äldre än <input type="number" min="0" max="120" style="width:5em" name="cvai_options[log_months]" value="<?php echo (int) $o['log_months']; ?>"> månader <span class="description">(0 = spara för alltid)</span><br>
+					Växelkurs för kostnaden: <input type="number" step="0.01" min="0.01" style="width:6em" name="cvai_options[kr_per_usd]" value="<?php echo esc_attr( $o['kr_per_usd'] ); ?>"> kr per dollar</td></tr>
 			</table>
 
 			<h2>Antal svar</h2>
@@ -2024,6 +2083,7 @@ function cvai_admin_page() {
 			</table>
 			<?php submit_button(); ?>
 		</form>
+		<?php else : ?>
 
 		<h2>Export för analys</h2>
 		<p>Sökhistoriken kan hämtas som JSON eller CSV, t.ex. av en schemalagd uppgift. E-postadresser och telefonnummer i frågorna maskeras.</p>
@@ -2035,12 +2095,13 @@ function cvai_admin_page() {
 		</table>
 
 		<h2>Senaste sökningarna</h2>
+		<?php $kr_sum = 0; ?>
 		<p>Här ser du vad kunderna faktiskt efterfrågar – och vad de inte hittar (status <em>no_hits</em>).</p>
 		<table class="widefat striped">
-			<thead><tr><th style="width:130px">Tid</th><th style="width:50px">Språk</th><th style="width:95px" title="Anonym kod per besökare och månad (inte IP-adress)">Besökare</th><th>Sökning</th><th>Tolkning</th><th>Träffar</th><th>Klick</th><th style="width:70px">ms</th><th style="width:80px">Status</th></tr></thead>
+			<thead><tr><th style="width:130px">Tid</th><th style="width:50px">Språk</th><th style="width:95px" title="Anonym kod per besökare och månad (inte IP-adress)">Besökare</th><th>Sökning</th><th>Tolkning</th><th>Träffar</th><th>Klick</th><th style="width:70px">ms</th><th style="width:80px" title="Vad anropet till Anthropic kostade. &quot;ca&quot; = uppskattat (äldre sökningar utan sparad kostnad).">Kostnad</th><th style="width:80px">Status</th></tr></thead>
 			<tbody>
 			<?php if ( ! $rows ) : ?>
-				<tr><td colspan="9">Inga sökningar ännu.</td></tr>
+				<tr><td colspan="10">Inga sökningar ännu.</td></tr>
 			<?php endif; ?>
 			<?php foreach ( (array) $rows as $r ) : ?>
 				<?php
@@ -2051,21 +2112,31 @@ function cvai_admin_page() {
 					$titles[] = $cards[ $id ]['title'] ?? $id;
 				}
 				$interp = json_decode( (string) $r->interpretation, true );
+				list( $kr, $exakt ) = cvai_row_cost_kr( $r, $interp );
+				if ( null !== $kr ) {
+					$kr_sum += $kr;
+				}
+				$visa = is_array( $interp ) ? array_diff_key( $interp, array_flip( array( 'usd', 'modell' ) ) ) : array();
 				?>
 				<tr>
 					<td><?php echo esc_html( $r->created ); ?></td>
 					<td><?php echo esc_html( $rl ); ?></td>
 					<td><code><?php echo esc_html( $r->visitor ?? '' ); ?></code></td>
 					<td><?php echo esc_html( $r->query ); ?><?php echo is_array( $interp ) && 'exempelknapp' === ( $interp['kalla'] ?? '' ) ? ' <em style="color:#646970">(exempelknapp)</em>' : ''; ?><?php echo is_array( $interp ) && ! empty( $interp['intern'] ) ? ' <em style="color:#646970">(intern)</em>' : ''; ?></td>
-					<td><?php echo esc_html( is_array( $interp ) ? implode( ' · ', $interp ) : '' ); ?></td>
+					<td><?php echo esc_html( implode( ' · ', $visa ) ); ?></td>
 					<td><?php echo esc_html( implode( ', ', $titles ) ); ?></td>
 					<td><?php echo esc_html( implode( ', ', array_map( function ( $k ) { return $k['namn'] . ' (' . $k['del'] . ')'; }, cvai_clicks_readable( $r->clicks ?? '', wp_list_pluck( $cards, 'title' ) ) ) ) ); ?></td>
 					<td><?php echo (int) $r->ms; ?></td>
+					<td style="white-space:nowrap"><?php echo null === $kr ? '–' : esc_html( ( $exakt ? '' : 'ca ' ) . number_format_i18n( $kr, 2 ) . ' kr' ); ?></td>
 					<td><?php echo esc_html( $r->status ); ?></td>
 				</tr>
 			<?php endforeach; ?>
 			</tbody>
+			<?php if ( $rows ) : ?>
+				<tfoot><tr><th colspan="8" style="text-align:right">Summa för de <?php echo count( $rows ); ?> sökningarna ovan</th><th style="white-space:nowrap"><?php echo esc_html( number_format_i18n( $kr_sum, 2 ) ); ?> kr</th><th></th></tr></tfoot>
+			<?php endif; ?>
 		</table>
+		<p class="description">Kostnaden räknas med Anthropics listpriser och <?php echo esc_html( number_format_i18n( (float) cvai_opt( 'kr_per_usd' ), 2 ) ); ?> kr per dollar (ändras under Sökhistorik på fliken Inställningar). Sökningar från före version 1.12.0 är uppskattade utan cachning.</p>
 
 		<h2>Förhandsgranska katalogen</h2>
 		<p>Så här ser resedatan ut som AI:n får läsa. Saknas nivå eller månad här, saknas den också för sökningen.</p>
@@ -2075,6 +2146,7 @@ function cvai_admin_page() {
 		<?php endforeach; ?>
 		</p>
 		<textarea class="large-text code" rows="14" readonly><?php echo esc_textarea( mb_substr( $catalogs[ $preview_lang ]['text'], 0, 30000 ) ); ?></textarea>
+		<?php endif; ?>
 	</div>
 	<?php
 }
