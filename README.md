@@ -71,6 +71,7 @@ vanliga uppdateringar under **Tillägg** och **Kontrollpanel → Uppdateringar**
 
 ## Versioner
 
+- **1.14.0** – Flikarna på adminsidan AI-sök är nu **Sökningar** (först), **Inställningar** och **Jämför upplägg**. Jämförelsen har flyttat från en egen menyrad till fliken; den gamla adressen skickas vidare. Jämförelsens kostnad använder växelkursen från inställningarna.
 - **1.13.0** – Adminsidan AI-sök har två flikar: **Inställningar** (status, inställningar och Spara) och **Sökningar** (export, senaste sökningarna med kostnad och förhandsgranskning av katalogen). Innehåller också 1.12.0: sökhistoriken visar vad varje sökning kostade (kolumnen Kostnad) och summan, med växelkursen som inställning.
 - **1.12.0** – Sökhistoriken visar vad varje sökning kostade (kolumnen **Kostnad**) och summan för de visade sökningarna. Kostnaden räknas ut vid sökningen från Anthropics svar, med modellens listpris och cachade tokens, och sparas med sökningen. Äldre sökningar uppskattas ("ca"). Växelkursen ställs in under Sökhistorik (standard 10 kr per dollar). Exporten har fältet `kostnad_usd`.
 - **1.11.0** – Ny adminsida **Cykla&Vandra → AI-sök: jämför**: kör frågor med olika upplägg (hela/bantad katalog, förfilter, Sonnet/Haiku) med sajtens nyckel och extraregler, och visar förslag, tokens, svarstid och kostnad sida vid sida. Påverkar inte kunderna; anropen loggas som interna jämförelser.
