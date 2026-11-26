@@ -71,6 +71,7 @@ vanliga uppdateringar under **Tillägg** och **Kontrollpanel → Uppdateringar**
 
 ## Versioner
 
+- **1.12.0** – Sökhistoriken visar vad varje sökning kostade (kolumnen **Kostnad**) och summan för de visade sökningarna. Kostnaden räknas ut vid sökningen från Anthropics svar, med modellens listpris och cachade tokens, och sparas med sökningen. Äldre sökningar uppskattas ("ca"). Växelkursen ställs in under Sökhistorik (standard 10 kr per dollar). Exporten har fältet `kostnad_usd`.
 - **1.11.0** – Ny adminsida **Cykla&Vandra → AI-sök: jämför**: kör frågor med olika upplägg (hela/bantad katalog, förfilter, Sonnet/Haiku) med sajtens nyckel och extraregler, och visar förslag, tokens, svarstid och kostnad sida vid sida. Påverkar inte kunderna; anropen loggas som interna jämförelser.
 - **1.10.0** – Lägre kostnad per sökning (av som standard, slås på i inställningarna): bantad katalog (faktarad + kort beskrivning, ca hälften så många tokens), förfiltrering på aktivitet, land/region och gravel, och val av prompt-cachning (av / 5 min / 1 timme). Loggen visar katalogens storlek och cachade tokens. Testverktyg i `tools/`.
 - **1.9.0** – Taggar på översatta språk matchas nu via WPML-kopplingen till den svenska originaltaggen: nivå (`hike1–4`/`bike1–4`), land, aktivitet och guidad/självguidad känns igen även när taggen fått ett annat namn på språket (t.ex. `lett`, `syklus`, `veiledet`, finska landsnamn). Nya språk kräver därmed inga tillägg i ordlistan.

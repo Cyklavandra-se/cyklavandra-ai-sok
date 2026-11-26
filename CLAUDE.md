@@ -32,6 +32,8 @@ här sökningen ska bli grunden till en ny förstasida.
     systemprompten med `cache_control`.
   - **Export** `GET /wp-json/cvai/v1/historik?fran=ÅÅÅÅ-MM-DD&till=…&format=json|csv`, nyckel i
     option `cvai_export_key` (`Authorization: Bearer` eller `X-Cvai-Key`). Maskerar e-post/telefon.
+    Kostnad per sökning: `cvai_cost_usd()` (priser i `cvai_model_price()`, filtret `cvai_model_prices`) sparas som `usd`
+    och `modell` i tolkningen; adminlistan visar kronor med inställningen `kr_per_usd`. Uppdatera priserna när nya modeller kommer.
     Daglig cron `cvai_cleanup_log` rensar loggen efter `log_months` (standard 12).
     Kolumnen `visitor` = `cvai_visitor_id()` (HMAC av IP + månad med `wp_salt`), aldrig rå IP.
     Sökningar från exempelknapparna skickar `exempel: true` och loggas med `kalla: exempelknapp` i tolkningen
